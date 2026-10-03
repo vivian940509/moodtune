@@ -3,6 +3,7 @@ from contextlib import contextmanager
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import NullPool
 
 
 DEFAULT_DATABASE_URL = "mysql+pymysql://root:@localhost/moodtune"
@@ -12,11 +13,24 @@ def get_database_url():
     database_url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
     if database_url.startswith("mysql://"):
         return database_url.replace("mysql://", "mysql+pymysql://", 1)
+    if database_url.startswith("postgres://"):
+        return database_url.replace("postgres://", "postgresql+psycopg2://", 1)
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
     return database_url
 
 
 def get_engine():
-    return create_engine(get_database_url(), pool_pre_ping=True, future=True)
+    database_url = get_database_url()
+    if database_url.startswith("postgresql+psycopg2://"):
+        return create_engine(
+            database_url,
+            connect_args={"sslmode": "require"},
+            pool_pre_ping=True,
+            poolclass=NullPool,
+            future=True,
+        )
+    return create_engine(database_url, pool_pre_ping=True, future=True)
 
 
 @contextmanager
@@ -26,33 +40,37 @@ def db_connection():
         yield connection
 
 
+def _insert_and_get_id(connection, statement, params):
+    if connection.dialect.name == "postgresql":
+        return connection.execute(text(f"{statement} RETURNING id"), params).scalar_one()
+    result = connection.execute(text(statement), params)
+    return result.lastrowid
+
+
 def save_analysis(song, mood, context, result):
     try:
         with db_connection() as connection:
-            entry = connection.execute(
-                text(
-                    """
-                    INSERT INTO mood_entries (mood, listening_context)
-                    VALUES (:mood, :context)
-                    """
-                ),
+            entry_id = _insert_and_get_id(
+                connection,
+                """
+                INSERT INTO mood_entries (mood, listening_context)
+                VALUES (:mood, :context)
+                """,
                 {"mood": mood, "context": context},
             )
-            entry_id = entry.lastrowid
 
-            song_insert = connection.execute(
-                text(
-                    """
-                    INSERT INTO song_inputs (
-                        mood_entry_id, itunes_track_id, track_name, artist_name,
-                        album_name, genre, artwork_url, preview_url
-                    )
-                    VALUES (
-                        :entry_id, :track_id, :track_name, :artist_name,
-                        :album_name, :genre, :artwork_url, :preview_url
-                    )
-                    """
-                ),
+            song_id = _insert_and_get_id(
+                connection,
+                """
+                INSERT INTO song_inputs (
+                    mood_entry_id, itunes_track_id, track_name, artist_name,
+                    album_name, genre, artwork_url, preview_url
+                )
+                VALUES (
+                    :entry_id, :track_id, :track_name, :artist_name,
+                    :album_name, :genre, :artwork_url, :preview_url
+                )
+                """,
                 {
                     "entry_id": entry_id,
                     "track_id": song.get("track_id"),
@@ -64,21 +82,19 @@ def save_analysis(song, mood, context, result):
                     "preview_url": song.get("preview_url"),
                 },
             )
-            song_id = song_insert.lastrowid
 
-            analysis = connection.execute(
-                text(
-                    """
-                    INSERT INTO analysis_results (
-                        mood_entry_id, song_input_id, temperature, drift_need,
-                        music_profile, analysis_text, suggestion_text
-                    )
-                    VALUES (
-                        :entry_id, :song_id, :temperature, :drift_need,
-                        :music_profile, :analysis_text, :suggestion_text
-                    )
-                    """
-                ),
+            analysis_id = _insert_and_get_id(
+                connection,
+                """
+                INSERT INTO analysis_results (
+                    mood_entry_id, song_input_id, temperature, drift_need,
+                    music_profile, analysis_text, suggestion_text
+                )
+                VALUES (
+                    :entry_id, :song_id, :temperature, :drift_need,
+                    :music_profile, :analysis_text, :suggestion_text
+                )
+                """,
                 {
                     "entry_id": entry_id,
                     "song_id": song_id,
@@ -89,7 +105,7 @@ def save_analysis(song, mood, context, result):
                     "suggestion_text": result["suggestion"],
                 },
             )
-            return analysis.lastrowid, None
+            return analysis_id, None
     except SQLAlchemyError as exc:
         return None, str(exc)
 

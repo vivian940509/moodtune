@@ -13,14 +13,23 @@ Build the first version as a public website where users:
 
 Do not add Spotify OAuth, YouTube API, login, payments, or full lyrics analysis unless the user explicitly asks.
 
-## Local Database
+## Database
 
-Local development may use XAMPP MySQL.
+Local development may use XAMPP MySQL. Production deployment should prefer Supabase Postgres when deploying on Vercel.
 
 Expected local environment:
 
 ```text
 DATABASE_URL=mysql+pymysql://root:@localhost/moodtune
+AI_API_KEY=
+AI_PROVIDER=
+```
+
+Expected Vercel/Supabase environment:
+
+```text
+DATABASE_URL=postgresql://postgres.<project-ref>:<password>@<pooler-host>:6543/postgres
+SECRET_KEY=<random string>
 AI_API_KEY=
 AI_PROVIDER=
 ```
@@ -36,6 +45,7 @@ Prefer these module boundaries:
 - `mood_analysis.py`: local scoring and stable analysis result schema.
 - `database.py`: database connection and persistence helpers.
 - `database/schema.sql`: MySQL schema.
+- `database/schema_supabase.sql`: Supabase/Postgres schema.
 - `templates/`: Jinja pages.
 - `static/`: CSS and browser JavaScript.
 

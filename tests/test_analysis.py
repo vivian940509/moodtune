@@ -1,4 +1,5 @@
 from mood_analysis import analyze_mood, normalize_itunes_track
+from database import get_database_url
 
 
 def test_analyze_mood_returns_scores_and_guidance_for_calm_sleep_context():
@@ -53,3 +54,21 @@ def test_normalize_itunes_track_maps_expected_fields():
         "artwork_url": "https://example.test/300x300bb.jpg",
         "preview_url": "https://example.test/preview.m4a",
     }
+
+
+def test_database_url_normalizes_mysql_driver(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "mysql://user:pass@host:3306/db")
+
+    assert get_database_url() == "mysql+pymysql://user:pass@host:3306/db"
+
+
+def test_database_url_normalizes_supabase_postgres_driver(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgres://postgres.project-ref:pass@aws.pooler.supabase.com:6543/postgres",
+    )
+
+    assert (
+        get_database_url()
+        == "postgresql+psycopg2://postgres.project-ref:pass@aws.pooler.supabase.com:6543/postgres"
+    )
