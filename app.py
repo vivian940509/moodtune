@@ -4,8 +4,8 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 
-from database import fetch_history, save_analysis
-from mood_analysis import analyze_mood
+from database import fetch_history, fetch_trends, save_analysis
+from mood_analysis import analyze_mood, recommendation_terms
 from music_api import search_tracks
 
 
@@ -16,6 +16,25 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-moodtune")
 
 MOODS = ["開心", "平靜", "累", "煩", "難過", "想專心"]
 CONTEXTS = ["通勤", "讀書", "上班", "睡前", "失戀", "放空"]
+
+
+def get_recommendations(mood, context, song):
+    recommendations = []
+    seen = {song.get("track_id")}
+    for term in recommendation_terms(mood, context, song):
+        try:
+            tracks = search_tracks(term, limit=3)
+        except Exception:
+            continue
+        for track in tracks:
+            track_id = track.get("track_id")
+            if track_id in seen:
+                continue
+            recommendations.append(track)
+            seen.add(track_id)
+            if len(recommendations) == 3:
+                return recommendations
+    return recommendations
 
 
 @app.get("/")
@@ -44,6 +63,7 @@ def analyze():
 
     song = json.loads(raw_song)
     result = analyze_mood(song=song, mood=mood, context=context)
+    recommendations = get_recommendations(mood=mood, context=context, song=song)
     saved_id, save_error = save_analysis(song=song, mood=mood, context=context, result=result)
 
     return render_template(
@@ -52,6 +72,7 @@ def analyze():
         mood=mood,
         context=context,
         result=result,
+        recommendations=recommendations,
         saved_id=saved_id,
         save_error=save_error,
     )
@@ -60,7 +81,8 @@ def analyze():
 @app.get("/history")
 def history():
     rows, error = fetch_history()
-    return render_template("history.html", rows=rows, error=error)
+    trends, trend_error = fetch_trends()
+    return render_template("history.html", rows=rows, trends=trends, error=error or trend_error)
 
 
 if __name__ == "__main__":

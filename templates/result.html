@@ -42,4 +42,52 @@
     {% endif %}
   </article>
 </section>
+
+<section class="result-extras">
+  <article class="panel share-panel">
+    <div>
+      <p class="eyebrow">分享卡</p>
+      <h2>今日聽歌心情卡</h2>
+      <p>把這次分析做成圖片，適合傳到限動或聊天室。</p>
+    </div>
+    <canvas
+      id="shareCanvas"
+      width="1080"
+      height="1350"
+      data-track="{{ song.track_name }}"
+      data-artist="{{ song.artist_name }}"
+      data-mood="{{ mood }}"
+      data-context="{{ context }}"
+      data-temperature="{{ result.temperature }}"
+      data-profile="{{ result.music_profile }}"
+      data-artwork="{{ song.artwork_url }}"
+    ></canvas>
+    <button class="primary" id="downloadShareCard" type="button">下載分享卡</button>
+  </article>
+
+  {% if recommendations %}
+  <article class="panel">
+    <p class="eyebrow">下一首</p>
+    <h2>依照今天狀態推薦</h2>
+    <div class="recommendation-list">
+      {% for track in recommendations %}
+      <div class="recommendation-item">
+        <img src="{{ track.artwork_url }}" alt="{{ track.track_name }} 專輯封面">
+        <div>
+          <strong>{{ track.track_name }}</strong>
+          <span>{{ track.artist_name }} · {{ track.genre }}</span>
+          {% if track.preview_url %}
+          <audio controls src="{{ track.preview_url }}"></audio>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/share-card.js') }}"></script>
 {% endblock %}

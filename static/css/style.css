@@ -62,7 +62,7 @@ main {
   padding-bottom: 44px;
 }
 
-.hero, .workspace, .result-layout {
+.hero, .workspace, .result-layout, .result-extras, .trend-grid {
   display: grid;
   gap: 18px;
 }
@@ -269,6 +269,11 @@ legend {
   margin-top: 22px;
 }
 
+.result-extras {
+  grid-template-columns: .82fr 1.18fr;
+  margin-top: 18px;
+}
+
 .song-summary {
   align-self: start;
 }
@@ -280,6 +285,57 @@ legend {
 audio {
   width: 100%;
   margin-top: 14px;
+}
+
+.share-panel {
+  display: grid;
+  gap: 16px;
+}
+
+#shareCanvas {
+  width: 100%;
+  max-width: 360px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.recommendation-list {
+  display: grid;
+  gap: 12px;
+}
+
+.recommendation-item {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfe;
+}
+
+.recommendation-item img {
+  width: 74px;
+  aspect-ratio: 1;
+  border-radius: 7px;
+  object-fit: cover;
+}
+
+.recommendation-item strong,
+.recommendation-item span {
+  display: block;
+}
+
+.recommendation-item span {
+  color: var(--muted);
+  font-size: .92rem;
+}
+
+.recommendation-item audio {
+  height: 34px;
+  margin-top: 8px;
 }
 
 .score strong {
@@ -337,6 +393,31 @@ audio {
   margin: 22px 0;
 }
 
+.trend-grid {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 18px;
+}
+
+.trend-card {
+  box-shadow: none;
+}
+
+.trend-card span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.trend-card strong {
+  display: block;
+  margin: 8px 0;
+  font-size: 1.65rem;
+}
+
+.trend-card p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .history-list {
   display: grid;
   gap: 12px;
@@ -370,7 +451,7 @@ footer {
 }
 
 @media (max-width: 820px) {
-  .hero, .workspace, .result-layout, .facts {
+  .hero, .workspace, .result-layout, .result-extras, .facts, .trend-grid {
     grid-template-columns: 1fr;
   }
 

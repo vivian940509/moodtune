@@ -123,3 +123,28 @@ def fetch_history(limit=30):
             return [dict(row._mapping) for row in rows], None
     except SQLAlchemyError as exc:
         return [], str(exc)
+
+
+def fetch_trends(limit=7):
+    rows, error = fetch_history(limit=limit)
+    if error or not rows:
+        return None, error
+
+    average_temperature = round(
+        sum(int(row["temperature"] or 0) for row in rows) / len(rows)
+    )
+    mood_counts = {}
+    context_counts = {}
+    for row in rows:
+        mood_counts[row["mood"]] = mood_counts.get(row["mood"], 0) + 1
+        context_counts[row["listening_context"]] = context_counts.get(row["listening_context"], 0) + 1
+
+    top_mood = max(mood_counts, key=mood_counts.get)
+    top_context = max(context_counts, key=context_counts.get)
+    return {
+        "count": len(rows),
+        "average_temperature": average_temperature,
+        "top_mood": top_mood,
+        "top_context": top_context,
+        "recent_tracks": rows[:3],
+    }, None

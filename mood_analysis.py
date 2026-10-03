@@ -16,6 +16,24 @@ CONTEXT_LABELS = {
     "放空": "放空",
 }
 
+RECOMMENDATION_TERMS = {
+    "開心": ["feel good pop", "happy mandopop", "city pop"],
+    "平靜": ["acoustic chill", "soft mandopop", "lofi calm"],
+    "累": ["sleepy acoustic", "gentle piano", "slow mandopop"],
+    "煩": ["indie rock release", "r&b chill", "lofi reset"],
+    "難過": ["sad mandopop", "healing ballad", "piano ballad"],
+    "想專心": ["lofi focus", "study beats", "instrumental focus"],
+}
+
+CONTEXT_RECOMMENDATION_TERMS = {
+    "通勤": "commute pop",
+    "讀書": "study beats",
+    "上班": "focus playlist",
+    "睡前": "sleep acoustic",
+    "失戀": "breakup ballad",
+    "放空": "ambient chill",
+}
+
 
 def normalize_itunes_track(raw):
     artwork = raw.get("artworkUrl100") or ""
@@ -74,3 +92,23 @@ def analyze_mood(song, mood, context):
         "analysis": analysis,
         "suggestion": suggestion,
     }
+
+
+def recommendation_terms(mood, context, song=None):
+    terms = list(RECOMMENDATION_TERMS.get(mood, RECOMMENDATION_TERMS["平靜"]))
+    context_term = CONTEXT_RECOMMENDATION_TERMS.get(context)
+    if context_term:
+        terms.insert(0, context_term)
+
+    genre = (song or {}).get("genre")
+    if genre:
+        terms.append(genre)
+
+    seen = set()
+    unique_terms = []
+    for term in terms:
+        normalized = term.lower()
+        if normalized not in seen:
+            unique_terms.append(term)
+            seen.add(normalized)
+    return unique_terms[:4]

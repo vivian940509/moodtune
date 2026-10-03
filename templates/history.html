@@ -13,6 +13,26 @@
   <p>請先啟動 XAMPP MySQL、建立 `moodtune` 資料庫，並匯入 `database/schema.sql`。</p>
 </section>
 {% elif rows %}
+{% if trends %}
+<section class="trend-grid">
+  <article class="panel trend-card">
+    <span>最近 {{ trends.count }} 次平均</span>
+    <strong>{{ trends.average_temperature }} / 100</strong>
+    <div class="bar"><i style="width: {{ trends.average_temperature }}%"></i></div>
+  </article>
+  <article class="panel trend-card">
+    <span>常見心情</span>
+    <strong>{{ trends.top_mood }}</strong>
+    <p>最近比較常在「{{ trends.top_context }}」時聽歌。</p>
+  </article>
+  <article class="panel trend-card">
+    <span>最近主旋律</span>
+    <strong>{{ trends.recent_tracks[0].music_profile }}</strong>
+    <p>{{ trends.recent_tracks[0].track_name }} · {{ trends.recent_tracks[0].artist_name }}</p>
+  </article>
+</section>
+{% endif %}
+
 <section class="history-list">
   {% for row in rows %}
   <article class="history-item">
