@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}MoodTune｜分析結果{% endblock %}
+
+{% block content %}
+<section class="result-layout">
+  <article class="panel song-summary">
+    <img src="{{ song.artwork_url }}" alt="{{ song.track_name }} 專輯封面">
+    <div>
+      <p class="eyebrow">{{ mood }} · {{ context }}</p>
+      <h1>{{ song.track_name }}</h1>
+      <p>{{ song.artist_name }}</p>
+      {% if song.preview_url %}
+      <audio controls src="{{ song.preview_url }}"></audio>
+      {% endif %}
+    </div>
+  </article>
+
+  <article class="panel result-card">
+    <div class="score">
+      <span>情緒溫度</span>
+      <strong>{{ result.temperature }} / 100</strong>
+      <div class="bar"><i style="width: {{ result.temperature }}%"></i></div>
+    </div>
+    <div class="facts">
+      <div>
+        <span>今日主旋律</span>
+        <strong>{{ result.music_profile }}</strong>
+      </div>
+      <div>
+        <span>放空需求</span>
+        <strong>{{ result.drift_need }}</strong>
+      </div>
+    </div>
+    <h2>AI 分析</h2>
+    <p>{{ result.analysis }}</p>
+    <h2>今日建議</h2>
+    <p>{{ result.suggestion }}</p>
+    {% if save_error %}
+    <p class="warning">結果已產生，但尚未存入資料庫。請確認 XAMPP MySQL 已啟動並匯入 schema。</p>
+    {% else %}
+    <p class="saved">已存入歷史紀錄。</p>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

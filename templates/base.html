@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}MoodTune{% endblock %}</title>
+    <meta name="description" content="根據歌曲、心情與情境產生今日聽歌心情分析。">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="{{ url_for('index') }}">MoodTune</a>
+      <nav>
+        <a href="{{ url_for('index') }}">分析</a>
+        <a href="{{ url_for('history') }}">歷史紀錄</a>
+      </nav>
+    </header>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+    <footer>
+      MoodTune 只提供聽歌心情參考，不是醫療或心理診斷。
+    </footer>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

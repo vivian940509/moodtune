@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}MoodTune｜今日聽歌心情分析{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">今日串流情緒</p>
+    <h1>今天的歌，透露了什麼心情？</h1>
+    <p class="lede">搜尋一首最近常聽的歌，選擇你的心情與情境，產生一份今日聽歌心情分析。</p>
+  </div>
+  <div class="hero-note">
+    <strong>第一版</strong>
+    <span>使用 iTunes Search API 搜歌，不需要登入 Spotify 或 YouTube。</span>
+  </div>
+</section>
+
+<section class="workspace">
+  <section class="panel">
+    <h2>搜尋歌曲</h2>
+    <div class="search-row">
+      <input id="songSearch" type="search" placeholder="輸入歌名或歌手，例如 如果可以">
+      <button id="searchButton" type="button">搜尋</button>
+    </div>
+    <p class="hint" id="searchHint">選一首歌後，再選心情與情境。</p>
+    <div class="track-grid" id="trackResults"></div>
+  </section>
+
+  <form class="panel form-panel" method="post" action="{{ url_for('analyze') }}">
+    <h2>今天的狀態</h2>
+    <input type="hidden" id="songJson" name="song_json">
+
+    <fieldset>
+      <legend>今天的心情</legend>
+      <div class="pill-grid">
+        {% for mood in moods %}
+        <label>
+          <input type="radio" name="mood" value="{{ mood }}" {% if loop.index == 2 %}checked{% endif %}>
+          <span>{{ mood }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>現在正在</legend>
+      <div class="pill-grid">
+        {% for context in contexts %}
+        <label>
+          <input type="radio" name="context" value="{{ context }}" {% if loop.index == 4 %}checked{% endif %}>
+          <span>{{ context }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <div class="selected-song" id="selectedSong">尚未選擇歌曲</div>
+    <button class="primary" id="analyzeButton" type="submit" disabled>開始分析</button>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}

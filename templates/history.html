@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}MoodTune｜歷史紀錄{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">我的紀錄</p>
+  <h1>最近的聽歌心情</h1>
+</section>
+
+{% if error %}
+<section class="panel warning-panel">
+  <h2>資料庫尚未連線</h2>
+  <p>請先啟動 XAMPP MySQL、建立 `moodtune` 資料庫，並匯入 `database/schema.sql`。</p>
+</section>
+{% elif rows %}
+<section class="history-list">
+  {% for row in rows %}
+  <article class="history-item">
+    <img src="{{ row.artwork_url }}" alt="{{ row.track_name }} 專輯封面">
+    <div>
+      <h2>{{ row.track_name }}</h2>
+      <p>{{ row.artist_name }} · {{ row.mood }} · {{ row.listening_context }}</p>
+      <span>{{ row.temperature }} 分 · {{ row.music_profile }}</span>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% else %}
+<section class="panel empty">
+  <h2>還沒有紀錄</h2>
+  <p>回到首頁完成第一次分析後，這裡會出現你的聽歌心情歷史。</p>
+</section>
+{% endif %}
+{% endblock %}
