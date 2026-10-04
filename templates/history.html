@@ -10,7 +10,7 @@
 {% if error %}
 <section class="panel warning-panel">
   <h2>資料庫尚未連線</h2>
-  <p>請先啟動 XAMPP MySQL、建立 `moodtune` 資料庫，並匯入 `database/schema.sql`。</p>
+  <p>請確認 `DATABASE_URL` 已設定，並已匯入對應 schema：本機 XAMPP MySQL 使用 `database/schema.sql`，Supabase PostgreSQL 使用 `database/schema_supabase.sql`。</p>
 </section>
 {% elif rows %}
 {% if trends %}

@@ -1,12 +1,15 @@
 import os
 from contextlib import contextmanager
+from pathlib import Path
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
 
-DEFAULT_DATABASE_URL = "mysql+pymysql://root:@localhost/moodtune"
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_DATABASE_URL = f"sqlite:///{(BASE_DIR / 'database' / 'moodtune.local.db').as_posix()}"
+_initialized_sqlite_urls = set()
 
 
 def get_database_url():
@@ -30,13 +33,38 @@ def get_engine():
             poolclass=NullPool,
             future=True,
         )
+    if database_url.startswith("sqlite:///"):
+        database_path = Path(database_url.replace("sqlite:///", "", 1))
+        database_path.parent.mkdir(parents=True, exist_ok=True)
+        return create_engine(database_url, pool_pre_ping=True, future=True)
     return create_engine(database_url, pool_pre_ping=True, future=True)
+
+
+def _initialize_sqlite(engine):
+    database_url = str(engine.url)
+    if engine.dialect.name != "sqlite" or database_url in _initialized_sqlite_urls:
+        return
+
+    schema_path = BASE_DIR / "database" / "schema_sqlite.sql"
+    statements = [
+        statement.strip()
+        for statement in schema_path.read_text(encoding="utf-8").split(";")
+        if statement.strip()
+    ]
+    with engine.begin() as connection:
+        connection.execute(text("PRAGMA foreign_keys = ON"))
+        for statement in statements:
+            connection.execute(text(statement))
+    _initialized_sqlite_urls.add(database_url)
 
 
 @contextmanager
 def db_connection():
     engine = get_engine()
+    _initialize_sqlite(engine)
     with engine.begin() as connection:
+        if connection.dialect.name == "sqlite":
+            connection.execute(text("PRAGMA foreign_keys = ON"))
         yield connection
 
 

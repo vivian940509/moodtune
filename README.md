@@ -44,6 +44,45 @@ AI_API_KEY=
 ```
 
 Then deploy from GitHub. Vercel detects `app.py` as the Flask entrypoint.
+`vercel.json` rewrites all routes to the Flask app, so `/`, `/history`, `/api/search`, and `/analyze` are served by the same application.
+
+After deployment, open the production URL and test:
+
+- Search for a song.
+- Run one analysis.
+- Open `/history` and confirm the saved result appears.
+
+## Local Setup With Supabase
+
+Use this setup when you want to run Flask on your computer, but store history in Supabase.
+
+### 1. Create Supabase Tables
+
+1. Open Supabase and create a project.
+2. Open SQL Editor.
+3. Paste and run `database/schema_supabase.sql`.
+
+### 2. Set `.env`
+
+Copy `.env.supabase.example` into `.env`, then replace the placeholders:
+
+```text
+DATABASE_URL=postgresql://postgres.<project-ref>:<password>@<pooler-host>:6543/postgres
+SECRET_KEY=dev-moodtune-local
+AI_PROVIDER=
+AI_API_KEY=
+```
+
+For local Flask and Vercel, the pooled connection string on port `6543` is usually the safest choice. If the database password contains special characters such as `#`, `?`, `&`, `%`, or a space, percent-encode it before saving it.
+
+### 3. Run Locally
+
+```powershell
+py -m pip install -r requirements.txt
+py app.py
+```
+
+Open `http://127.0.0.1:5000`, run an analysis, then open `/history`.
 
 ## Local Setup With XAMPP MySQL
 
@@ -71,6 +110,12 @@ Open:
 http://127.0.0.1:5000
 ```
 
+Run tests before deploying changes:
+
+```powershell
+py -m pytest
+```
+
 ## Railway MySQL
 
 Set these variables in Railway:
@@ -83,3 +128,9 @@ AI_API_KEY=
 ```
 
 Run `database/schema.sql` on the Railway database before using history.
+
+## Notes
+
+- MoodTune still works without `AI_API_KEY`; it uses the local rule-based analysis in `mood_analysis.py`.
+- The history page needs a reachable database. If saving fails, analysis still renders, but the result will not appear in `/history`.
+- Do not commit real `.env` values. Keep production secrets in Vercel, Railway, or Supabase settings.

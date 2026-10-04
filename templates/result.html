@@ -36,7 +36,7 @@
     <h2>今日建議</h2>
     <p>{{ result.suggestion }}</p>
     {% if save_error %}
-    <p class="warning">結果已產生，但尚未存入資料庫。請確認 XAMPP MySQL 已啟動並匯入 schema。</p>
+    <p class="warning">結果已產生，但尚未存入資料庫。請確認 `DATABASE_URL`、資料庫連線與 schema 是否已設定完成。</p>
     {% else %}
     <p class="saved">已存入歷史紀錄。</p>
     {% endif %}

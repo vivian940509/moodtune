@@ -3,6 +3,7 @@ import os
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, url_for
+from werkzeug.exceptions import BadRequest
 
 from database import fetch_history, fetch_trends, save_analysis
 from mood_analysis import analyze_mood, recommendation_terms
@@ -45,8 +46,10 @@ def index():
 @app.get("/api/search")
 def api_search():
     term = request.args.get("q", "")
+    limit = request.args.get("limit", 8, type=int)
+    limit = max(1, min(limit or 8, 12))
     try:
-        tracks = search_tracks(term)
+        tracks = search_tracks(term, limit=limit)
         return jsonify({"tracks": tracks})
     except Exception as exc:
         return jsonify({"error": f"搜尋暫時失敗：{exc}"}), 502
@@ -58,10 +61,21 @@ def analyze():
     context = request.form.get("context", "放空")
     raw_song = request.form.get("song_json", "")
 
+    if mood not in MOODS:
+        mood = "平靜"
+    if context not in CONTEXTS:
+        context = "放空"
     if not raw_song:
         return redirect(url_for("index"))
 
-    song = json.loads(raw_song)
+    try:
+        song = json.loads(raw_song)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise BadRequest("歌曲資料格式不正確，請回首頁重新選擇歌曲。") from exc
+
+    if not isinstance(song, dict) or not song.get("track_name") or not song.get("artist_name"):
+        raise BadRequest("歌曲資料不完整，請回首頁重新選擇歌曲。")
+
     result = analyze_mood(song=song, mood=mood, context=context)
     recommendations = get_recommendations(mood=mood, context=context, song=song)
     saved_id, save_error = save_analysis(song=song, mood=mood, context=context, result=result)

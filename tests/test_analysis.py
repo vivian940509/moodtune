@@ -1,5 +1,6 @@
 from mood_analysis import analyze_mood, normalize_itunes_track
-from database import get_database_url
+from database import fetch_history, get_database_url, save_analysis
+from app import app
 
 
 def test_analyze_mood_returns_scores_and_guidance_for_calm_sleep_context():
@@ -72,3 +73,52 @@ def test_database_url_normalizes_supabase_postgres_driver(monkeypatch):
         get_database_url()
         == "postgresql+psycopg2://postgres.project-ref:pass@aws.pooler.supabase.com:6543/postgres"
     )
+
+
+def test_sqlite_database_auto_initializes_and_persists_history(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-test.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    song = {
+        "track_id": "123",
+        "track_name": "晴天",
+        "artist_name": "周杰倫",
+        "album_name": "葉惠美",
+        "genre": "Mandopop",
+        "artwork_url": "https://example.test/art.jpg",
+        "preview_url": "https://example.test/preview.m4a",
+    }
+    result = analyze_mood(song=song, mood="平靜", context="睡前")
+
+    saved_id, save_error = save_analysis(
+        song=song,
+        mood="平靜",
+        context="睡前",
+        result=result,
+    )
+    rows, fetch_error = fetch_history()
+
+    assert save_error is None
+    assert saved_id is not None
+    assert fetch_error is None
+    assert rows[0]["track_name"] == "晴天"
+    assert rows[0]["mood"] == "平靜"
+
+
+def test_analyze_route_rejects_invalid_song_json():
+    client = app.test_client()
+
+    response = client.post(
+        "/analyze",
+        data={"song_json": "{not json", "mood": "開心", "context": "通勤"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_analyze_route_redirects_when_song_missing():
+    client = app.test_client()
+
+    response = client.post("/analyze", data={"mood": "開心", "context": "通勤"})
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
