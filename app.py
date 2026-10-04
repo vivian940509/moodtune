@@ -19,6 +19,61 @@ MOODS = ["開心", "平靜", "累", "煩", "難過", "想專心"]
 CONTEXTS = ["通勤", "讀書", "上班", "睡前", "失戀", "放空"]
 
 
+def build_history_chart(rows):
+    recent_rows = list(reversed(rows[:30]))
+    return {
+        "labels": [
+            str(row.get("created_at", ""))[:10] or row.get("track_name", "紀錄")
+            for row in recent_rows
+        ],
+        "temperatures": [int(row.get("temperature") or 0) for row in recent_rows],
+        "moods": [row.get("mood", "") for row in recent_rows],
+        "tracks": [row.get("track_name", "") for row in recent_rows],
+    }
+
+
+def build_weekly_report(rows):
+    recent_rows = rows[:7]
+    if not recent_rows:
+        return None
+
+    average_temperature = round(
+        sum(int(row.get("temperature") or 0) for row in recent_rows) / len(recent_rows)
+    )
+    mood_counts = {}
+    context_counts = {}
+    profile_counts = {}
+    for row in recent_rows:
+        mood_counts[row["mood"]] = mood_counts.get(row["mood"], 0) + 1
+        context_counts[row["listening_context"]] = context_counts.get(row["listening_context"], 0) + 1
+        profile_counts[row["music_profile"]] = profile_counts.get(row["music_profile"], 0) + 1
+
+    top_mood = max(mood_counts, key=mood_counts.get)
+    top_context = max(context_counts, key=context_counts.get)
+    top_profile = max(profile_counts, key=profile_counts.get)
+
+    if average_temperature >= 75:
+        tone = "這週的聽歌狀態偏明亮，音樂比較像在幫你補充動能。"
+        suggestion = "可以保留幾首節奏穩定的歌，讓好狀態不要太快被消耗。"
+    elif average_temperature >= 55:
+        tone = "這週的情緒溫度落在中段，音樂比較像在幫你整理節奏。"
+        suggestion = "適合安排一段固定聽歌時間，把專注、休息和轉換情緒分開。"
+    else:
+        tone = "這週的情緒溫度偏低，音樂比較像陪伴與修復。"
+        suggestion = "建議先選熟悉、壓力低的歌曲，再慢慢加入一點明亮節奏。"
+
+    return {
+        "count": len(recent_rows),
+        "average_temperature": average_temperature,
+        "top_mood": top_mood,
+        "top_context": top_context,
+        "top_profile": top_profile,
+        "summary": f"最近 {len(recent_rows)} 次紀錄中，你最常出現「{top_mood}」的狀態，常在「{top_context}」時聽歌。",
+        "tone": tone,
+        "suggestion": suggestion,
+    }
+
+
 def get_recommendations(mood, context, song):
     recommendations = []
     seen = {song.get("track_id")}
@@ -96,7 +151,16 @@ def analyze():
 def history():
     rows, error = fetch_history()
     trends, trend_error = fetch_trends()
-    return render_template("history.html", rows=rows, trends=trends, error=error or trend_error)
+    chart = build_history_chart(rows)
+    weekly_report = build_weekly_report(rows)
+    return render_template(
+        "history.html",
+        rows=rows,
+        trends=trends,
+        chart=chart,
+        weekly_report=weekly_report,
+        error=error or trend_error,
+    )
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@
 {% if error %}
 <section class="panel warning-panel">
   <h2>資料庫尚未連線</h2>
-  <p>請確認 `DATABASE_URL` 已設定，並已匯入對應 schema：本機 XAMPP MySQL 使用 `database/schema.sql`，Supabase PostgreSQL 使用 `database/schema_supabase.sql`。</p>
+  <p>請確認 `DATABASE_URL` 已設定，並已匯入對應 schema：本機 SQLite 會自動建表，XAMPP MySQL 使用 `database/schema.sql`，Supabase PostgreSQL 使用 `database/schema_supabase.sql`。</p>
 </section>
 {% elif rows %}
 {% if trends %}
@@ -33,6 +33,38 @@
 </section>
 {% endif %}
 
+<section class="history-insights">
+  <article class="panel chart-panel">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">情緒折線圖</p>
+        <h2>最近 {{ chart.temperatures|length }} 次情緒溫度</h2>
+      </div>
+      <span>0 - 100</span>
+    </div>
+    <canvas id="moodTrendChart" data-chart='{{ chart|tojson }}'></canvas>
+  </article>
+
+  {% if weekly_report %}
+  <article class="panel weekly-report">
+    <p class="eyebrow">AI Weekly Report</p>
+    <h2>本週聽歌心情摘要</h2>
+    <div class="weekly-score">
+      <span>平均情緒溫度</span>
+      <strong>{{ weekly_report.average_temperature }}</strong>
+    </div>
+    <p>{{ weekly_report.summary }}</p>
+    <p>{{ weekly_report.tone }}</p>
+    <div class="report-facts">
+      <span>{{ weekly_report.top_mood }}</span>
+      <span>{{ weekly_report.top_context }}</span>
+      <span>{{ weekly_report.top_profile }}</span>
+    </div>
+    <p class="suggestion">{{ weekly_report.suggestion }}</p>
+  </article>
+  {% endif %}
+</section>
+
 <section class="history-list">
   {% for row in rows %}
   <article class="history-item">
@@ -51,4 +83,9 @@
   <p>回到首頁完成第一次分析後，這裡會出現你的聽歌心情歷史。</p>
 </section>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/history-chart.js') }}"></script>
 {% endblock %}

@@ -122,3 +122,25 @@ def test_analyze_route_redirects_when_song_missing():
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/")
+
+
+def test_history_page_shows_chart_and_weekly_report(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-history.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    song = {
+        "track_id": "456",
+        "track_name": "Test Song",
+        "artist_name": "Test Artist",
+        "album_name": "Test Album",
+        "genre": "Pop",
+        "artwork_url": "https://example.test/art.jpg",
+        "preview_url": "",
+    }
+    result = analyze_mood(song=song, mood="開心", context="通勤")
+    save_analysis(song=song, mood="開心", context="通勤", result=result)
+
+    response = app.test_client().get("/history")
+
+    assert response.status_code == 200
+    assert "moodTrendChart".encode() in response.data
+    assert "AI Weekly Report".encode() in response.data
