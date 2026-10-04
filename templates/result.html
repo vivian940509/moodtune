@@ -12,6 +12,14 @@
       {% if song.preview_url %}
       <audio controls src="{{ song.preview_url }}"></audio>
       {% endif %}
+      <div class="platform-links" aria-label="外部音樂平台">
+        <a href="{{ song.youtube_music_url }}" target="_blank" rel="noopener">YouTube Music</a>
+        {% if song.apple_music_url %}
+        <a href="{{ song.apple_music_url }}" target="_blank" rel="noopener">Apple Music</a>
+        {% endif %}
+        <a href="{{ song.spotify_url }}" target="_blank" rel="noopener">Spotify</a>
+        <a href="{{ song.soundcloud_url }}" target="_blank" rel="noopener">SoundCloud</a>
+      </div>
     </div>
   </article>
 
@@ -79,6 +87,13 @@
           {% if track.preview_url %}
           <audio controls src="{{ track.preview_url }}"></audio>
           {% endif %}
+          <div class="platform-links compact" aria-label="外部音樂平台">
+            <a href="{{ track.youtube_music_url }}" target="_blank" rel="noopener">YouTube Music</a>
+            {% if track.apple_music_url %}
+            <a href="{{ track.apple_music_url }}" target="_blank" rel="noopener">Apple Music</a>
+            {% endif %}
+            <a href="{{ track.spotify_url }}" target="_blank" rel="noopener">Spotify</a>
+          </div>
         </div>
       </div>
       {% endfor %}

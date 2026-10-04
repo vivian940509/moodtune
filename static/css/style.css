@@ -287,6 +287,37 @@ audio {
   margin-top: 14px;
 }
 
+.platform-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.platform-links a {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--teal-dark);
+  font-size: .9rem;
+  font-weight: 900;
+}
+
+.platform-links a:hover {
+  border-color: var(--teal);
+  background: #e8f5f3;
+}
+
+.platform-links.compact {
+  margin-top: 10px;
+}
+
+.platform-links.compact a {
+  padding: 6px 8px;
+  font-size: .82rem;
+}
+
 .share-panel {
   display: grid;
   gap: 16px;

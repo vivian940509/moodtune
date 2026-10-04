@@ -1,3 +1,5 @@
+import json
+
 from mood_analysis import analyze_mood, normalize_itunes_track
 from database import fetch_history, get_database_url, save_analysis
 from app import app
@@ -42,6 +44,7 @@ def test_normalize_itunes_track_maps_expected_fields():
         "primaryGenreName": "Mandopop",
         "artworkUrl100": "https://example.test/100x100bb.jpg",
         "previewUrl": "https://example.test/preview.m4a",
+        "trackViewUrl": "https://music.apple.com/tw/album/test/123",
     }
 
     track = normalize_itunes_track(raw)
@@ -54,6 +57,10 @@ def test_normalize_itunes_track_maps_expected_fields():
         "genre": "Mandopop",
         "artwork_url": "https://example.test/300x300bb.jpg",
         "preview_url": "https://example.test/preview.m4a",
+        "apple_music_url": "https://music.apple.com/tw/album/test/123",
+        "youtube_music_url": "https://music.youtube.com/search?q=%E6%99%B4%E5%A4%A9+%E5%91%A8%E6%9D%B0%E5%80%AB",
+        "spotify_url": "https://open.spotify.com/search/%E6%99%B4%E5%A4%A9+%E5%91%A8%E6%9D%B0%E5%80%AB",
+        "soundcloud_url": "https://soundcloud.com/search?q=%E6%99%B4%E5%A4%A9+%E5%91%A8%E6%9D%B0%E5%80%AB",
     }
 
 
@@ -122,6 +129,31 @@ def test_analyze_route_redirects_when_song_missing():
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/")
+
+
+def test_analyze_route_shows_external_platform_links(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-platforms.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    client = app.test_client()
+    song = {
+        "track_id": "789",
+        "track_name": "夜曲",
+        "artist_name": "周杰倫",
+        "album_name": "十一月的蕭邦",
+        "genre": "Mandopop",
+        "artwork_url": "https://example.test/art.jpg",
+        "preview_url": "",
+    }
+
+    response = client.post(
+        "/analyze",
+        data={"song_json": json.dumps(song), "mood": "平靜", "context": "睡前"},
+    )
+
+    assert response.status_code == 200
+    assert "YouTube Music".encode() in response.data
+    assert "Spotify".encode() in response.data
+    assert b"music.youtube.com/search" in response.data
 
 
 def test_history_page_shows_chart_and_weekly_report(monkeypatch, tmp_path):

@@ -1,3 +1,6 @@
+from urllib.parse import quote_plus
+
+
 MOOD_SETTINGS = {
     "開心": {"temperature": 82, "drift_need": "低", "tone": "明亮", "profile": "明亮・流動"},
     "平靜": {"temperature": 64, "drift_need": "中高", "tone": "沉澱", "profile": "沉澱"},
@@ -35,17 +38,38 @@ CONTEXT_RECOMMENDATION_TERMS = {
 }
 
 
+def build_platform_links(track_name, artist_name, apple_music_url=""):
+    query = quote_plus(f"{track_name} {artist_name}".strip())
+    return {
+        "youtube_music": f"https://music.youtube.com/search?q={query}",
+        "spotify": f"https://open.spotify.com/search/{query}",
+        "soundcloud": f"https://soundcloud.com/search?q={query}",
+        "apple_music": apple_music_url or "",
+    }
+
+
 def normalize_itunes_track(raw):
     artwork = raw.get("artworkUrl100") or ""
     artwork = artwork.replace("100x100bb", "300x300bb")
+    track_name = raw.get("trackName") or "未知歌曲"
+    artist_name = raw.get("artistName") or "未知歌手"
+    platform_links = build_platform_links(
+        track_name=track_name,
+        artist_name=artist_name,
+        apple_music_url=raw.get("trackViewUrl") or "",
+    )
     return {
         "track_id": str(raw.get("trackId") or ""),
-        "track_name": raw.get("trackName") or "未知歌曲",
-        "artist_name": raw.get("artistName") or "未知歌手",
+        "track_name": track_name,
+        "artist_name": artist_name,
         "album_name": raw.get("collectionName") or "",
         "genre": raw.get("primaryGenreName") or "Pop",
         "artwork_url": artwork,
         "preview_url": raw.get("previewUrl") or "",
+        "apple_music_url": platform_links["apple_music"],
+        "youtube_music_url": platform_links["youtube_music"],
+        "spotify_url": platform_links["spotify"],
+        "soundcloud_url": platform_links["soundcloud"],
     }
 
 

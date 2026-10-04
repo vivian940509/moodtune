@@ -6,7 +6,7 @@ from flask import Flask, jsonify, redirect, render_template, request, url_for
 from werkzeug.exceptions import BadRequest
 
 from database import fetch_history, fetch_trends, save_analysis
-from mood_analysis import analyze_mood, recommendation_terms
+from mood_analysis import analyze_mood, build_platform_links, recommendation_terms
 from music_api import search_tracks
 
 
@@ -17,6 +17,19 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-moodtune")
 
 MOODS = ["開心", "平靜", "累", "煩", "難過", "想專心"]
 CONTEXTS = ["通勤", "讀書", "上班", "睡前", "失戀", "放空"]
+
+
+def ensure_platform_links(song):
+    links = build_platform_links(
+        track_name=song.get("track_name", ""),
+        artist_name=song.get("artist_name", ""),
+        apple_music_url=song.get("apple_music_url", ""),
+    )
+    song.setdefault("apple_music_url", links["apple_music"])
+    song.setdefault("youtube_music_url", links["youtube_music"])
+    song.setdefault("spotify_url", links["spotify"])
+    song.setdefault("soundcloud_url", links["soundcloud"])
+    return song
 
 
 def build_history_chart(rows):
@@ -131,8 +144,12 @@ def analyze():
     if not isinstance(song, dict) or not song.get("track_name") or not song.get("artist_name"):
         raise BadRequest("歌曲資料不完整，請回首頁重新選擇歌曲。")
 
+    song = ensure_platform_links(song)
     result = analyze_mood(song=song, mood=mood, context=context)
-    recommendations = get_recommendations(mood=mood, context=context, song=song)
+    recommendations = [
+        ensure_platform_links(track)
+        for track in get_recommendations(mood=mood, context=context, song=song)
+    ]
     saved_id, save_error = save_analysis(song=song, mood=mood, context=context, result=result)
 
     return render_template(
