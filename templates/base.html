@@ -13,9 +13,20 @@
       <nav>
         <a href="{{ url_for('index') }}">分析</a>
         <a href="{{ url_for('history') }}">歷史紀錄</a>
+        <a href="{{ url_for('leaderboard') }}">排行榜</a>
+        <a href="{{ url_for('favorites') }}">收藏</a>
       </nav>
     </header>
     <main>
+      {% with messages = get_flashed_messages() %}
+      {% if messages %}
+      <section class="flash-list">
+        {% for message in messages %}
+        <p>{{ message }}</p>
+        {% endfor %}
+      </section>
+      {% endif %}
+      {% endwith %}
       {% block content %}{% endblock %}
     </main>
     <footer>

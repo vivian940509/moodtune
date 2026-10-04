@@ -45,6 +45,8 @@ def build_platform_links(track_name, artist_name, apple_music_url=""):
         "spotify": f"https://open.spotify.com/search/{query}",
         "soundcloud": f"https://soundcloud.com/search?q={query}",
         "apple_music": apple_music_url or "",
+        "genius_lyrics": f"https://genius.com/search?q={query}",
+        "google_lyrics": f"https://www.google.com/search?q={query}+lyrics",
     }
 
 
@@ -70,6 +72,8 @@ def normalize_itunes_track(raw):
         "youtube_music_url": platform_links["youtube_music"],
         "spotify_url": platform_links["spotify"],
         "soundcloud_url": platform_links["soundcloud"],
+        "genius_lyrics_url": platform_links["genius_lyrics"],
+        "google_lyrics_url": platform_links["google_lyrics"],
     }
 
 

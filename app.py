@@ -2,12 +2,19 @@ import json
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 from werkzeug.exceptions import BadRequest
 
-from database import fetch_history, fetch_trends, save_analysis
+from database import (
+    fetch_favorite_songs,
+    fetch_history,
+    fetch_song_leaderboard,
+    fetch_trends,
+    save_analysis,
+    save_favorite_song,
+)
 from mood_analysis import analyze_mood, build_platform_links, recommendation_terms
-from music_api import search_tracks
+from music_api import fetch_top_songs, search_tracks
 
 
 load_dotenv()
@@ -29,6 +36,8 @@ def ensure_platform_links(song):
     song.setdefault("youtube_music_url", links["youtube_music"])
     song.setdefault("spotify_url", links["spotify"])
     song.setdefault("soundcloud_url", links["soundcloud"])
+    song.setdefault("genius_lyrics_url", links["genius_lyrics"])
+    song.setdefault("google_lyrics_url", links["google_lyrics"])
     return song
 
 
@@ -178,6 +187,49 @@ def history():
         weekly_report=weekly_report,
         error=error or trend_error,
     )
+
+
+@app.get("/leaderboard")
+def leaderboard():
+    songs, error = fetch_song_leaderboard()
+    try:
+        trending_songs = [ensure_platform_links(song) for song in fetch_top_songs(limit=10)]
+        trending_error = None
+    except Exception as exc:
+        trending_songs = []
+        trending_error = f"熱門榜單暫時無法讀取：{exc}"
+    return render_template(
+        "leaderboard.html",
+        songs=songs,
+        trending_songs=trending_songs,
+        error=error,
+        trending_error=trending_error,
+    )
+
+
+@app.post("/favorites/add")
+def add_favorite():
+    raw_song = request.form.get("song_json", "")
+    next_url = request.form.get("next") or url_for("favorites")
+    try:
+        song = ensure_platform_links(json.loads(raw_song))
+    except (json.JSONDecodeError, TypeError):
+        flash("收藏失敗，歌曲資料格式不正確。")
+        return redirect(next_url)
+
+    if not song.get("track_name") or not song.get("artist_name"):
+        flash("收藏失敗，歌曲資料不完整。")
+        return redirect(next_url)
+
+    ok, error = save_favorite_song(song)
+    flash("已加入收藏。" if ok and not error else f"收藏失敗：{error}")
+    return redirect(next_url)
+
+
+@app.get("/favorites")
+def favorites():
+    songs, error = fetch_favorite_songs()
+    return render_template("favorites.html", songs=songs, error=error)
 
 
 if __name__ == "__main__":

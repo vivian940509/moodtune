@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}MoodTune｜歌曲排行榜{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Music Mood Ranking</p>
+  <h1>歌曲排行榜</h1>
+  <p class="lede">依照你的分析歷史，整理最常被選來記錄心情的歌曲。</p>
+</section>
+
+{% if trending_songs %}
+<section class="panel leaderboard-list">
+  <div class="section-title">
+    <div>
+      <p class="eyebrow">Now Trending</p>
+      <h2>目前熱門歌曲</h2>
+    </div>
+    <span>iTunes Top Songs</span>
+  </div>
+
+  {% for song in trending_songs %}
+  <article class="leaderboard-row">
+    <strong class="rank-index">{{ loop.index }}</strong>
+    <img src="{{ song.artwork_url }}" alt="{{ song.track_name }} 專輯封面">
+    <div>
+      <h3>{{ song.track_name }}</h3>
+      <p>{{ song.artist_name }} · {{ song.genre or "Music" }}</p>
+      <div class="platform-links compact">
+        <a href="{{ song.youtube_music_url }}" target="_blank" rel="noopener">YouTube Music</a>
+        {% if song.apple_music_url %}
+        <a href="{{ song.apple_music_url }}" target="_blank" rel="noopener">Apple Music</a>
+        {% endif %}
+        <a href="{{ song.genius_lyrics_url }}" target="_blank" rel="noopener">歌詞</a>
+      </div>
+    </div>
+    <form class="leaderboard-action" method="post" action="{{ url_for('add_favorite') }}">
+      <input type="hidden" name="song_json" value='{{ song|tojson }}'>
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <button class="inline-action" type="submit">收藏</button>
+    </form>
+  </article>
+  {% endfor %}
+</section>
+{% elif trending_error %}
+<section class="panel warning-panel">
+  <h2>熱門榜單暫時無法讀取</h2>
+  <p>{{ trending_error }}</p>
+</section>
+{% endif %}
+
+{% if error %}
+<section class="panel warning-panel">
+  <h2>排行榜暫時無法讀取</h2>
+  <p>請確認資料庫連線與 schema 是否已設定完成。</p>
+</section>
+{% elif songs %}
+<section class="leaderboard-podium">
+  {% for song in songs[:3] %}
+  <article class="panel podium-card rank-{{ loop.index }}">
+    <span class="rank-number">#{{ loop.index }}</span>
+    <img src="{{ song.artwork_url }}" alt="{{ song.track_name }} 專輯封面">
+    <h2>{{ song.track_name }}</h2>
+    <p>{{ song.artist_name }}</p>
+    <div class="rank-stats">
+      <span>{{ song.play_count }} 次分析</span>
+      <span>{{ song.average_temperature|int }} 分</span>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+
+<section class="panel leaderboard-list">
+  <div class="section-title">
+    <div>
+      <p class="eyebrow">Top Songs</p>
+      <h2>完整排行</h2>
+    </div>
+    <span>依分析次數排序</span>
+  </div>
+
+  {% for song in songs %}
+  <article class="leaderboard-row">
+    <strong class="rank-index">{{ loop.index }}</strong>
+    <img src="{{ song.artwork_url }}" alt="{{ song.track_name }} 專輯封面">
+    <div>
+      <h3>{{ song.track_name }}</h3>
+      <p>{{ song.artist_name }} · {{ song.genre or "Music" }}</p>
+    </div>
+    <div class="leaderboard-metric">
+      <span>分析次數</span>
+      <strong>{{ song.play_count }}</strong>
+    </div>
+    <div class="leaderboard-metric">
+      <span>平均溫度</span>
+      <strong>{{ song.average_temperature|int }}</strong>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% else %}
+<section class="panel empty">
+  <h2>排行榜還沒有資料</h2>
+  <p>完成幾次歌曲心情分析後，這裡會自動整理最常出現的歌曲。</p>
+</section>
+{% endif %}
+{% endblock %}

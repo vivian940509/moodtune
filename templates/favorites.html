@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}MoodTune｜我的收藏{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Favorite Songs</p>
+  <h1>我的收藏</h1>
+  <p class="lede">把適合自己的歌先留下來，之後可以快速回來播放、看歌詞或重新分析。</p>
+</section>
+
+{% if error %}
+<section class="panel warning-panel">
+  <h2>收藏暫時無法讀取</h2>
+  <p>請確認資料庫連線與 schema 是否已設定完成。</p>
+</section>
+{% elif songs %}
+<section class="panel leaderboard-list">
+  <div class="section-title">
+    <div>
+      <p class="eyebrow">Saved</p>
+      <h2>收藏歌曲</h2>
+    </div>
+    <span>{{ songs|length }} 首</span>
+  </div>
+
+  {% for song in songs %}
+  <article class="leaderboard-row">
+    <strong class="rank-index">{{ loop.index }}</strong>
+    <img src="{{ song.artwork_url }}" alt="{{ song.track_name }} 專輯封面">
+    <div>
+      <h3>{{ song.track_name }}</h3>
+      <p>{{ song.artist_name }} · {{ song.genre or "Music" }}</p>
+      <div class="platform-links compact">
+        {% if song.preview_url %}
+        <a href="{{ song.preview_url }}" target="_blank" rel="noopener">30 秒試聽</a>
+        {% endif %}
+        <a href="{{ song.youtube_music_url }}" target="_blank" rel="noopener">YouTube Music</a>
+        {% if song.apple_music_url %}
+        <a href="{{ song.apple_music_url }}" target="_blank" rel="noopener">Apple Music</a>
+        {% endif %}
+        <a href="{{ song.spotify_url }}" target="_blank" rel="noopener">Spotify</a>
+      </div>
+    </div>
+    <div class="leaderboard-metric">
+      <span>收藏時間</span>
+      <strong>{{ song.created_at|string|truncate(10, true, "") }}</strong>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% else %}
+<section class="panel empty">
+  <h2>還沒有收藏</h2>
+  <p>在分析結果、推薦歌曲或排行榜按下收藏後，歌曲會出現在這裡。</p>
+</section>
+{% endif %}
+{% endblock %}

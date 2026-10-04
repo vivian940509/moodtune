@@ -1,7 +1,14 @@
 import json
 
 from mood_analysis import analyze_mood, normalize_itunes_track
-from database import fetch_history, get_database_url, save_analysis
+from database import (
+    fetch_favorite_songs,
+    fetch_history,
+    fetch_song_leaderboard,
+    get_database_url,
+    save_analysis,
+    save_favorite_song,
+)
 from app import app
 
 
@@ -61,6 +68,8 @@ def test_normalize_itunes_track_maps_expected_fields():
         "youtube_music_url": "https://music.youtube.com/search?q=%E6%99%B4%E5%A4%A9+%E5%91%A8%E6%9D%B0%E5%80%AB",
         "spotify_url": "https://open.spotify.com/search/%E6%99%B4%E5%A4%A9+%E5%91%A8%E6%9D%B0%E5%80%AB",
         "soundcloud_url": "https://soundcloud.com/search?q=%E6%99%B4%E5%A4%A9+%E5%91%A8%E6%9D%B0%E5%80%AB",
+        "genius_lyrics_url": "https://genius.com/search?q=%E6%99%B4%E5%A4%A9+%E5%91%A8%E6%9D%B0%E5%80%AB",
+        "google_lyrics_url": "https://www.google.com/search?q=%E6%99%B4%E5%A4%A9+%E5%91%A8%E6%9D%B0%E5%80%AB+lyrics",
     }
 
 
@@ -176,3 +185,70 @@ def test_history_page_shows_chart_and_weekly_report(monkeypatch, tmp_path):
     assert response.status_code == 200
     assert "moodTrendChart".encode() in response.data
     assert "AI Weekly Report".encode() in response.data
+
+
+def test_song_leaderboard_counts_repeated_tracks(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-leaderboard.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    song = {
+        "track_id": "999",
+        "track_name": "排行榜之歌",
+        "artist_name": "MoodTune",
+        "album_name": "MoodTune",
+        "genre": "Pop",
+        "artwork_url": "https://example.test/art.jpg",
+        "preview_url": "",
+    }
+    result = analyze_mood(song=song, mood="開心", context="通勤")
+
+    save_analysis(song=song, mood="開心", context="通勤", result=result)
+    save_analysis(song=song, mood="開心", context="通勤", result=result)
+    songs, error = fetch_song_leaderboard()
+
+    assert error is None
+    assert songs[0]["track_name"] == "排行榜之歌"
+    assert songs[0]["play_count"] == 2
+
+
+def test_leaderboard_page_renders(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-leaderboard-page.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    response = app.test_client().get("/leaderboard")
+
+    assert response.status_code == 200
+    assert "歌曲排行榜".encode() in response.data
+
+
+def test_favorite_songs_can_be_saved_and_listed(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-favorites.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    song = {
+        "track_id": "fav-1",
+        "track_name": "收藏之歌",
+        "artist_name": "MoodTune",
+        "album_name": "Favorites",
+        "genre": "Pop",
+        "artwork_url": "https://example.test/fav.jpg",
+        "preview_url": "",
+        "apple_music_url": "",
+        "youtube_music_url": "https://music.youtube.com/search?q=fav",
+        "spotify_url": "https://open.spotify.com/search/fav",
+        "soundcloud_url": "https://soundcloud.com/search?q=fav",
+    }
+
+    ok, error = save_favorite_song(song)
+    songs, fetch_error = fetch_favorite_songs()
+
+    assert ok is True
+    assert error is None
+    assert fetch_error is None
+    assert songs[0]["track_name"] == "收藏之歌"
+
+
+def test_favorites_page_renders(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-favorites-page.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    response = app.test_client().get("/favorites")
+
+    assert response.status_code == 200
+    assert "我的收藏".encode() in response.data

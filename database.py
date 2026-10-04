@@ -192,3 +192,126 @@ def fetch_trends(limit=7):
         "top_context": top_context,
         "recent_tracks": rows[:3],
     }, None
+
+
+def fetch_song_leaderboard(limit=10):
+    try:
+        with db_connection() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT
+                        si.track_name,
+                        si.artist_name,
+                        si.artwork_url,
+                        si.genre,
+                        COUNT(*) AS play_count,
+                        ROUND(AVG(ar.temperature)) AS average_temperature,
+                        MAX(me.created_at) AS last_played_at
+                    FROM analysis_results ar
+                    JOIN mood_entries me ON me.id = ar.mood_entry_id
+                    JOIN song_inputs si ON si.id = ar.song_input_id
+                    GROUP BY si.track_name, si.artist_name, si.artwork_url, si.genre
+                    ORDER BY play_count DESC, average_temperature DESC, last_played_at DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"limit": limit},
+            )
+            return [dict(row._mapping) for row in rows], None
+    except SQLAlchemyError as exc:
+        return [], str(exc)
+
+
+def save_favorite_song(song):
+    try:
+        with db_connection() as connection:
+            params = {
+                "track_id": song.get("track_id"),
+                "track_name": song.get("track_name"),
+                "artist_name": song.get("artist_name"),
+                "album_name": song.get("album_name"),
+                "genre": song.get("genre"),
+                "artwork_url": song.get("artwork_url"),
+                "preview_url": song.get("preview_url"),
+                "apple_music_url": song.get("apple_music_url"),
+                "youtube_music_url": song.get("youtube_music_url"),
+                "spotify_url": song.get("spotify_url"),
+                "soundcloud_url": song.get("soundcloud_url"),
+            }
+            if connection.dialect.name == "postgresql":
+                statement = """
+                    INSERT INTO favorite_songs (
+                        itunes_track_id, track_name, artist_name, album_name, genre,
+                        artwork_url, preview_url, apple_music_url, youtube_music_url,
+                        spotify_url, soundcloud_url
+                    )
+                    VALUES (
+                        :track_id, :track_name, :artist_name, :album_name, :genre,
+                        :artwork_url, :preview_url, :apple_music_url, :youtube_music_url,
+                        :spotify_url, :soundcloud_url
+                    )
+                    ON CONFLICT (track_name, artist_name) DO NOTHING
+                """
+            elif connection.dialect.name == "mysql":
+                statement = """
+                    INSERT IGNORE INTO favorite_songs (
+                        itunes_track_id, track_name, artist_name, album_name, genre,
+                        artwork_url, preview_url, apple_music_url, youtube_music_url,
+                        spotify_url, soundcloud_url
+                    )
+                    VALUES (
+                        :track_id, :track_name, :artist_name, :album_name, :genre,
+                        :artwork_url, :preview_url, :apple_music_url, :youtube_music_url,
+                        :spotify_url, :soundcloud_url
+                    )
+                """
+            else:
+                statement = """
+                    INSERT OR IGNORE INTO favorite_songs (
+                        itunes_track_id, track_name, artist_name, album_name, genre,
+                        artwork_url, preview_url, apple_music_url, youtube_music_url,
+                        spotify_url, soundcloud_url
+                    )
+                    VALUES (
+                        :track_id, :track_name, :artist_name, :album_name, :genre,
+                        :artwork_url, :preview_url, :apple_music_url, :youtube_music_url,
+                        :spotify_url, :soundcloud_url
+                    )
+                """
+            connection.execute(text(statement), params)
+            return True, None
+    except SQLAlchemyError as exc:
+        return False, str(exc)
+
+
+def fetch_favorite_songs(limit=50):
+    try:
+        with db_connection() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT
+                        id,
+                        itunes_track_id,
+                        track_name,
+                        artist_name,
+                        album_name,
+                        genre,
+                        artwork_url,
+                        preview_url,
+                        apple_music_url,
+                        youtube_music_url,
+                        spotify_url,
+                        soundcloud_url,
+                        created_at
+                    FROM favorite_songs
+                    ORDER BY created_at DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"limit": limit},
+            )
+            return [dict(row._mapping) for row in rows], None
+    except SQLAlchemyError as exc:
+        return [], str(exc)

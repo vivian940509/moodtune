@@ -19,7 +19,13 @@
         {% endif %}
         <a href="{{ song.spotify_url }}" target="_blank" rel="noopener">Spotify</a>
         <a href="{{ song.soundcloud_url }}" target="_blank" rel="noopener">SoundCloud</a>
+        <a href="{{ song.genius_lyrics_url }}" target="_blank" rel="noopener">歌詞</a>
       </div>
+      <form method="post" action="{{ url_for('add_favorite') }}">
+        <input type="hidden" name="song_json" value='{{ song|tojson }}'>
+        <input type="hidden" name="next" value="{{ request.full_path }}">
+        <button class="secondary-action" type="submit">收藏這首歌</button>
+      </form>
     </div>
   </article>
 
@@ -93,7 +99,13 @@
             <a href="{{ track.apple_music_url }}" target="_blank" rel="noopener">Apple Music</a>
             {% endif %}
             <a href="{{ track.spotify_url }}" target="_blank" rel="noopener">Spotify</a>
+            <a href="{{ track.genius_lyrics_url }}" target="_blank" rel="noopener">歌詞</a>
           </div>
+          <form method="post" action="{{ url_for('add_favorite') }}">
+            <input type="hidden" name="song_json" value='{{ track|tojson }}'>
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <button class="inline-action" type="submit">收藏</button>
+          </form>
         </div>
       </div>
       {% endfor %}

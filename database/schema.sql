@@ -48,3 +48,20 @@ CREATE TABLE IF NOT EXISTS analysis_results (
     FOREIGN KEY (song_input_id) REFERENCES song_inputs(id)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS favorite_songs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  itunes_track_id VARCHAR(64) NULL,
+  track_name VARCHAR(255) NOT NULL,
+  artist_name VARCHAR(255) NOT NULL,
+  album_name VARCHAR(255) NULL,
+  genre VARCHAR(120) NULL,
+  artwork_url TEXT NULL,
+  preview_url TEXT NULL,
+  apple_music_url TEXT NULL,
+  youtube_music_url TEXT NULL,
+  spotify_url TEXT NULL,
+  soundcloud_url TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_favorite_song (track_name, artist_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -48,3 +48,20 @@ CREATE TABLE IF NOT EXISTS analysis_results (
     FOREIGN KEY (song_input_id) REFERENCES song_inputs(id)
     ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS favorite_songs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  itunes_track_id TEXT,
+  track_name TEXT NOT NULL,
+  artist_name TEXT NOT NULL,
+  album_name TEXT,
+  genre TEXT,
+  artwork_url TEXT,
+  preview_url TEXT,
+  apple_music_url TEXT,
+  youtube_music_url TEXT,
+  spotify_url TEXT,
+  soundcloud_url TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(track_name, artist_name)
+);
