@@ -5,32 +5,38 @@
 <section class="hero">
   <div>
     <p class="eyebrow">今日串流情緒</p>
-    <h1>今天的歌，透露了什麼心情？</h1>
-    <p class="lede">搜尋一首最近常聽的歌，選擇你的心情與情境，產生一份今日聽歌心情分析。</p>
+    <h1>先說說心情，再找一首陪你的歌。</h1>
+    <p class="lede">寫下現在的感受、選擇情境，再從搜尋結果挑一首歌，產生今日聽歌心情分析與日記。</p>
   </div>
   <div class="hero-note">
-    <strong>第一版</strong>
-    <span>使用 iTunes Search API 搜歌，不需要登入 Spotify 或 YouTube。</span>
+    <strong>你的音樂偏好</strong>
+    {% if preferences %}
+    <span>{{ preferences.music_language }} · {{ preferences.favorite_genre }}{% if preferences.kpop_group %} · {{ preferences.kpop_group }}{% endif %}</span>
+    {% else %}
+    <span>尚未設定，仍可直接開始分析。</span>
+    {% endif %}
+    <a href="{{ url_for('preferences') }}">修改偏好</a>
   </div>
 </section>
 
-<section class="workspace">
-  <section class="panel">
-    <h2>搜尋歌曲</h2>
-    <div class="search-row">
-      <input id="songSearch" type="search" placeholder="輸入歌名或歌手，例如 如果可以">
-      <button id="searchButton" type="button">搜尋</button>
-    </div>
-    <p class="hint" id="searchHint">選一首歌後，再選心情與情境。</p>
-    <div class="track-grid" id="trackResults"></div>
-  </section>
+{% if preference_error %}
+<section class="panel warning-panel">
+  <p>偏好設定目前無法讀取，但不影響歌曲搜尋與分析。</p>
+</section>
+{% endif %}
 
-  <form class="panel form-panel" method="post" action="{{ url_for('analyze') }}">
+<form class="workspace" method="post" action="{{ url_for('analyze') }}">
+  <section class="panel form-panel">
+    <p class="step-label">STEP 1</p>
     <h2>今天的狀態</h2>
     <input type="hidden" id="songJson" name="song_json">
 
+    <label class="field-label" for="moodText">先用一句話描述現在的心情</label>
+    <textarea id="moodText" name="mood_text" maxlength="500" placeholder="例如：今天報告很多，有點累，也有點焦慮……"></textarea>
+    <p class="hint" id="moodSuggestion">輸入後會協助選擇接近的心情，你仍然可以自己調整。</p>
+
     <fieldset>
-      <legend>今天的心情</legend>
+      <legend>最接近哪一種心情？</legend>
       <div class="pill-grid">
         {% for mood in moods %}
         <label>
@@ -53,10 +59,23 @@
       </div>
     </fieldset>
 
+    <label class="field-label" for="diaryText">心情日記（選填）</label>
+    <textarea id="diaryText" name="diary_text" maxlength="1000" placeholder="今天發生了什麼？你希望音樂怎麼陪伴你？"></textarea>
+  </section>
+
+  <section class="panel">
+    <p class="step-label">STEP 2</p>
+    <h2>搜尋歌曲</h2>
+    <div class="search-row">
+      <input id="songSearch" type="search" value="{{ search_suggestion }}" placeholder="輸入歌名、歌手或團體，例如 如果可以">
+      <button id="searchButton" type="button">搜尋</button>
+    </div>
+    <p class="hint" id="searchHint">搜尋並選一首最符合今天狀態的歌。</p>
+    <div class="track-grid" id="trackResults"></div>
     <div class="selected-song" id="selectedSong">尚未選擇歌曲</div>
-    <button class="primary" id="analyzeButton" type="submit" disabled>開始分析</button>
-  </form>
-</section>
+    <button class="primary" id="analyzeButton" type="submit" disabled>分析並存入心情日記</button>
+  </section>
+</form>
 {% endblock %}
 
 {% block scripts %}

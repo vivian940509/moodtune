@@ -4,11 +4,24 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS user_preferences (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  visitor_id TEXT NOT NULL UNIQUE,
+  music_language TEXT NOT NULL,
+  favorite_genre TEXT NOT NULL,
+  kpop_group TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS mood_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER,
+  visitor_id TEXT,
   mood TEXT NOT NULL,
   listening_context TEXT NOT NULL,
+  mood_text TEXT,
+  diary_text TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_mood_entries_user
     FOREIGN KEY (user_id) REFERENCES users(id)

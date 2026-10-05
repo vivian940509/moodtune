@@ -4,10 +4,12 @@ from mood_analysis import analyze_mood, normalize_itunes_track
 from database import (
     fetch_favorite_songs,
     fetch_history,
+    fetch_preferences,
     fetch_song_leaderboard,
     get_database_url,
     save_analysis,
     save_favorite_song,
+    save_preferences,
 )
 from app import app
 
@@ -140,6 +142,53 @@ def test_analyze_route_redirects_when_song_missing():
     assert response.headers["Location"].endswith("/")
 
 
+def test_first_visit_redirects_to_music_preferences(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-first-visit.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+
+    response = app.test_client().get("/")
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/preferences")
+
+
+def test_kpop_preferences_are_saved_from_onboarding(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-onboarding.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    client = app.test_client()
+
+    response = client.post(
+        "/preferences",
+        data={
+            "action": "save",
+            "music_language": "韓文／K-pop",
+            "favorite_genre": "流行",
+            "kpop_group": "aespa",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "aespa".encode() in response.data
+    assert "先說說心情".encode() in response.data
+
+
+def test_visitors_can_skip_preferences(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-skip-preferences.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    client = app.test_client()
+
+    response = client.post(
+        "/preferences",
+        data={"action": "skip"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b'moodText' in response.data
+    assert b'diaryText' in response.data
+
+
 def test_analyze_route_shows_external_platform_links(monkeypatch, tmp_path):
     database_path = tmp_path / "moodtune-platforms.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
@@ -178,13 +227,70 @@ def test_history_page_shows_chart_and_weekly_report(monkeypatch, tmp_path):
         "preview_url": "",
     }
     result = analyze_mood(song=song, mood="開心", context="通勤")
-    save_analysis(song=song, mood="開心", context="通勤", result=result)
+    visitor_id = "history-test-visitor"
+    save_analysis(
+        song=song,
+        mood="開心",
+        context="通勤",
+        result=result,
+        visitor_id=visitor_id,
+        mood_text="今天完成了重要工作，很開心。",
+        diary_text="這首歌讓我想把好心情記下來。",
+    )
 
-    response = app.test_client().get("/history")
+    client = app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["visitor_id"] = visitor_id
+
+    response = client.get("/history")
 
     assert response.status_code == 200
     assert "moodTrendChart".encode() in response.data
     assert "AI Weekly Report".encode() in response.data
+    assert "今天完成了重要工作".encode() in response.data
+
+
+def test_preferences_can_be_saved_and_loaded(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-preferences.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+
+    ok, error = save_preferences(
+        visitor_id="preference-test-visitor",
+        music_language="韓文／K-pop",
+        favorite_genre="流行",
+        kpop_group="TWICE",
+    )
+    preferences, fetch_error = fetch_preferences("preference-test-visitor")
+
+    assert ok is True
+    assert error is None
+    assert fetch_error is None
+    assert preferences["music_language"] == "韓文／K-pop"
+    assert preferences["kpop_group"] == "TWICE"
+
+
+def test_history_is_filtered_by_anonymous_visitor(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-private-history.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    song = {
+        "track_id": "private-1",
+        "track_name": "Private Song",
+        "artist_name": "MoodTune",
+        "album_name": "Journal",
+        "genre": "Pop",
+        "artwork_url": "https://example.test/private.jpg",
+        "preview_url": "",
+    }
+    result = analyze_mood(song=song, mood="平靜", context="睡前")
+    save_analysis(song, "平靜", "睡前", result, visitor_id="visitor-a")
+
+    own_rows, own_error = fetch_history(visitor_id="visitor-a")
+    other_rows, other_error = fetch_history(visitor_id="visitor-b")
+
+    assert own_error is None
+    assert other_error is None
+    assert len(own_rows) == 1
+    assert other_rows == []
 
 
 def test_song_leaderboard_counts_repeated_tracks(monkeypatch, tmp_path):

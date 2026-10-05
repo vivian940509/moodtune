@@ -1,17 +1,20 @@
 import json
 import os
+import uuid
 
 from dotenv import load_dotenv
-from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.exceptions import BadRequest
 
 from database import (
     fetch_favorite_songs,
     fetch_history,
+    fetch_preferences,
     fetch_song_leaderboard,
     fetch_trends,
     save_analysis,
     save_favorite_song,
+    save_preferences,
 )
 from mood_analysis import analyze_mood, build_platform_links, recommendation_terms
 from music_api import fetch_top_songs, search_tracks
@@ -24,6 +27,18 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-moodtune")
 
 MOODS = ["開心", "平靜", "累", "煩", "難過", "想專心"]
 CONTEXTS = ["通勤", "讀書", "上班", "睡前", "失戀", "放空"]
+MUSIC_LANGUAGES = ["華語", "西洋", "日文", "韓文／K-pop"]
+MUSIC_GENRES = ["流行", "抒情", "搖滾", "R&B", "電子", "獨立音樂"]
+KPOP_GROUPS = [
+    "BTS",
+    "BLACKPINK",
+    "SEVENTEEN",
+    "TWICE",
+    "Stray Kids",
+    "aespa",
+    "IVE",
+    "LE SSERAFIM",
+]
 
 
 def ensure_platform_links(song):
@@ -96,10 +111,18 @@ def build_weekly_report(rows):
     }
 
 
-def get_recommendations(mood, context, song):
+def get_recommendations(mood, context, song, preferences=None):
     recommendations = []
     seen = {song.get("track_id")}
-    for term in recommendation_terms(mood, context, song):
+    terms = []
+    if preferences:
+        if preferences.get("kpop_group"):
+            terms.append(preferences["kpop_group"])
+        elif preferences.get("favorite_genre"):
+            terms.append(preferences["favorite_genre"])
+    terms.extend(recommendation_terms(mood, context, song))
+
+    for term in terms:
         try:
             tracks = search_tracks(term, limit=3)
         except Exception:
@@ -115,9 +138,78 @@ def get_recommendations(mood, context, song):
     return recommendations
 
 
+@app.before_request
+def ensure_visitor_id():
+    if "visitor_id" not in session:
+        session["visitor_id"] = uuid.uuid4().hex
+
+
 @app.get("/")
 def index():
-    return render_template("index.html", moods=MOODS, contexts=CONTEXTS)
+    preferences, preference_error = fetch_preferences(session["visitor_id"])
+    if preferences is None and not preference_error and not session.get("preferences_skipped"):
+        return redirect(url_for("preferences"))
+
+    search_suggestion = ""
+    if preferences:
+        search_suggestion = preferences.get("kpop_group") or preferences.get("favorite_genre") or ""
+
+    return render_template(
+        "index.html",
+        moods=MOODS,
+        contexts=CONTEXTS,
+        preferences=preferences,
+        preference_error=preference_error,
+        search_suggestion=search_suggestion,
+    )
+
+
+@app.route("/preferences", methods=["GET", "POST"])
+def preferences():
+    current, load_error = fetch_preferences(session["visitor_id"])
+
+    if request.method == "POST":
+        if request.form.get("action") == "skip":
+            session["preferences_skipped"] = True
+            return redirect(url_for("index"))
+
+        music_language = request.form.get("music_language", "")
+        favorite_genre = request.form.get("favorite_genre", "")
+        kpop_group = request.form.get("kpop_group", "")
+
+        if music_language not in MUSIC_LANGUAGES or favorite_genre not in MUSIC_GENRES:
+            flash("請選擇常聽語言與喜歡的曲風。")
+        elif kpop_group and kpop_group not in KPOP_GROUPS:
+            flash("韓團選項不正確，請重新選擇。")
+        else:
+            if music_language != "韓文／K-pop":
+                kpop_group = ""
+            ok, save_error = save_preferences(
+                visitor_id=session["visitor_id"],
+                music_language=music_language,
+                favorite_genre=favorite_genre,
+                kpop_group=kpop_group,
+            )
+            if ok:
+                session.pop("preferences_skipped", None)
+                flash("音樂偏好已儲存。")
+                return redirect(url_for("index"))
+            flash(f"偏好暫時無法儲存：{save_error}")
+
+        current = {
+            "music_language": music_language,
+            "favorite_genre": favorite_genre,
+            "kpop_group": kpop_group,
+        }
+
+    return render_template(
+        "preferences.html",
+        preferences=current,
+        music_languages=MUSIC_LANGUAGES,
+        music_genres=MUSIC_GENRES,
+        kpop_groups=KPOP_GROUPS,
+        error=load_error,
+    )
 
 
 @app.get("/api/search")
@@ -136,6 +228,8 @@ def api_search():
 def analyze():
     mood = request.form.get("mood", "平靜")
     context = request.form.get("context", "放空")
+    mood_text = request.form.get("mood_text", "").strip()[:500]
+    diary_text = request.form.get("diary_text", "").strip()[:1000]
     raw_song = request.form.get("song_json", "")
 
     if mood not in MOODS:
@@ -155,11 +249,25 @@ def analyze():
 
     song = ensure_platform_links(song)
     result = analyze_mood(song=song, mood=mood, context=context)
+    preferences_data, _ = fetch_preferences(session["visitor_id"])
     recommendations = [
         ensure_platform_links(track)
-        for track in get_recommendations(mood=mood, context=context, song=song)
+        for track in get_recommendations(
+            mood=mood,
+            context=context,
+            song=song,
+            preferences=preferences_data,
+        )
     ]
-    saved_id, save_error = save_analysis(song=song, mood=mood, context=context, result=result)
+    saved_id, save_error = save_analysis(
+        song=song,
+        mood=mood,
+        context=context,
+        result=result,
+        visitor_id=session["visitor_id"],
+        mood_text=mood_text,
+        diary_text=diary_text,
+    )
 
     return render_template(
         "result.html",
@@ -168,6 +276,8 @@ def analyze():
         context=context,
         result=result,
         recommendations=recommendations,
+        mood_text=mood_text,
+        diary_text=diary_text,
         saved_id=saved_id,
         save_error=save_error,
     )
@@ -175,8 +285,8 @@ def analyze():
 
 @app.get("/history")
 def history():
-    rows, error = fetch_history()
-    trends, trend_error = fetch_trends()
+    rows, error = fetch_history(visitor_id=session["visitor_id"])
+    trends, trend_error = fetch_trends(visitor_id=session["visitor_id"])
     chart = build_history_chart(rows)
     weekly_report = build_weekly_report(rows)
     return render_template(

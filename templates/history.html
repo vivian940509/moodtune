@@ -38,9 +38,15 @@
     <div class="section-title">
       <div>
         <p class="eyebrow">情緒折線圖</p>
-        <h2>最近 {{ chart.temperatures|length }} 次情緒溫度</h2>
+        <h2 id="chartRangeTitle">最近 7 次情緒溫度</h2>
       </div>
-      <span>0 - 100</span>
+      <label class="chart-range-label">
+        <span class="sr-only">圖表顯示範圍</span>
+        <select id="chartRange">
+          <option value="7">最近 7 次</option>
+          <option value="30">最近 30 次</option>
+        </select>
+      </label>
     </div>
     <canvas id="moodTrendChart" data-chart='{{ chart|tojson }}'></canvas>
   </article>
@@ -73,6 +79,12 @@
       <h2>{{ row.track_name }}</h2>
       <p>{{ row.artist_name }} · {{ row.mood }} · {{ row.listening_context }}</p>
       <span>{{ row.temperature }} 分 · {{ row.music_profile }}</span>
+      {% if row.mood_text %}
+      <p class="mood-note"><strong>當時的心情：</strong>{{ row.mood_text }}</p>
+      {% endif %}
+      {% if row.diary_text %}
+      <blockquote class="diary-note">{{ row.diary_text }}</blockquote>
+      {% endif %}
     </div>
   </article>
   {% endfor %}

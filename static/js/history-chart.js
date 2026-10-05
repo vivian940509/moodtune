@@ -3,15 +3,28 @@ const trendCanvas = document.querySelector("#moodTrendChart");
 if (trendCanvas && window.Chart) {
   const chartData = JSON.parse(trendCanvas.dataset.chart || "{}");
   const temperatures = chartData.temperatures || [];
+  const rangeSelect = document.querySelector("#chartRange");
+  const rangeTitle = document.querySelector("#chartRangeTitle");
 
-  new Chart(trendCanvas, {
+  function sliceChartData(range) {
+    return {
+      labels: (chartData.labels || []).slice(-range),
+      temperatures: temperatures.slice(-range),
+      moods: (chartData.moods || []).slice(-range),
+      tracks: (chartData.tracks || []).slice(-range),
+    };
+  }
+
+  let visibleData = sliceChartData(7);
+
+  const chart = new Chart(trendCanvas, {
     type: "line",
     data: {
-      labels: chartData.labels || [],
+      labels: visibleData.labels,
       datasets: [
         {
           label: "情緒溫度",
-          data: temperatures,
+          data: visibleData.temperatures,
           borderColor: "#1c8077",
           backgroundColor: "rgba(28, 128, 119, .14)",
           fill: true,
@@ -39,8 +52,8 @@ if (trendCanvas && window.Chart) {
           callbacks: {
             afterLabel(context) {
               const index = context.dataIndex;
-              const mood = chartData.moods?.[index] || "";
-              const track = chartData.tracks?.[index] || "";
+              const mood = visibleData.moods?.[index] || "";
+              const track = visibleData.tracks?.[index] || "";
               return [mood, track].filter(Boolean);
             },
           },
@@ -65,4 +78,15 @@ if (trendCanvas && window.Chart) {
       },
     },
   });
+
+  rangeSelect?.addEventListener("change", () => {
+    const range = Number(rangeSelect.value);
+    visibleData = sliceChartData(range);
+    chart.data.labels = visibleData.labels;
+    chart.data.datasets[0].data = visibleData.temperatures;
+    rangeTitle.textContent = `最近 ${visibleData.temperatures.length} 次情緒溫度`;
+    chart.update();
+  });
+
+  rangeTitle.textContent = `最近 ${visibleData.temperatures.length} 次情緒溫度`;
 }

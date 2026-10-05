@@ -16,9 +16,14 @@ Use this setup when you want everyone to open MoodTune through a public URL.
 The Supabase schema creates:
 
 - `users`
+- `user_preferences`
 - `mood_entries`
 - `song_inputs`
 - `analysis_results`
+
+If this project was deployed before the preference and mood journal features were added,
+run `database/migrate_mood_journal_supabase.sql` once in Supabase SQL Editor instead of
+recreating the existing tables.
 
 ### 2. Copy The Supabase Database URL
 
@@ -97,6 +102,10 @@ Open `http://127.0.0.1:5000`, run an analysis, then open `/history`.
 DATABASE_URL=mysql+pymysql://root:@localhost/moodtune
 ```
 
+For an existing MySQL database, run `database/migrate_mood_journal_mysql.sql` once.
+Do not run the migration repeatedly because its `ALTER TABLE` statements are intended
+for a one-time upgrade.
+
 Install dependencies and run:
 
 ```powershell
@@ -132,5 +141,7 @@ Run `database/schema.sql` on the Railway database before using history.
 ## Notes
 
 - MoodTune still works without `AI_API_KEY`; it uses the local rule-based analysis in `mood_analysis.py`.
+- First-time visitors can save a language, genre, and optional K-pop group preference without creating an account.
+- Mood text, diary text, and history are associated with an anonymous browser session ID stored in Flask's signed session cookie.
 - The history page needs a reachable database. If saving fails, analysis still renders, but the result will not appear in `/history`.
 - Do not commit real `.env` values. Keep production secrets in Vercel, Railway, or Supabase settings.

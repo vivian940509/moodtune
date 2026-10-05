@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}MoodTune｜音樂偏好{% endblock %}
+
+{% block content %}
+<section class="preference-layout">
+  <div class="page-head">
+    <p class="eyebrow">WELCOME TO MOODTUNE</p>
+    <h1>先讓 MoodTune 認識你的音樂口味。</h1>
+    <p class="lede">偏好只用來改善搜尋提示與推薦，不需要登入，也可以之後再修改。</p>
+  </div>
+
+  <form class="panel preference-form" method="post">
+    {% if error %}
+    <p class="warning">資料庫目前無法讀取偏好設定，你可以先略過。</p>
+    {% endif %}
+
+    <label class="field-label" for="musicLanguage">常聽的歌曲語言</label>
+    <select id="musicLanguage" name="music_language" required>
+      <option value="">請選擇</option>
+      {% for language in music_languages %}
+      <option value="{{ language }}" {% if preferences and preferences.music_language == language %}selected{% endif %}>{{ language }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="field-label" for="favoriteGenre">最喜歡的曲風</label>
+    <select id="favoriteGenre" name="favorite_genre" required>
+      <option value="">請選擇</option>
+      {% for genre in music_genres %}
+      <option value="{{ genre }}" {% if preferences and preferences.favorite_genre == genre %}selected{% endif %}>{{ genre }}</option>
+      {% endfor %}
+    </select>
+
+    <div id="kpopGroupField" {% if not preferences or preferences.music_language != "韓文／K-pop" %}hidden{% endif %}>
+      <label class="field-label" for="kpopGroup">喜歡的韓團</label>
+      <select id="kpopGroup" name="kpop_group">
+        <option value="">沒有特定團體</option>
+        {% for group in kpop_groups %}
+        <option value="{{ group }}" {% if preferences and preferences.kpop_group == group %}selected{% endif %}>{{ group }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-actions">
+      <button class="primary" type="submit" name="action" value="save">儲存並開始使用</button>
+      <button class="secondary-action" type="submit" name="action" value="skip" formnovalidate>先略過</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/preferences.js') }}"></script>
+{% endblock %}
