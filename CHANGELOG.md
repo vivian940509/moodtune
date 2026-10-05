@@ -126,3 +126,12 @@ DATABASE_URL=sqlite:///database/moodtune.local.db
 origin/main
 https://github.com/vivian940509/moodtune.git
 ```
+
+## 2026-10-05 - Accounts, language-aware search, compact chart
+- Added email/password registration, login and logout (passwords stored as Werkzeug hashes).
+- Account sessions use a stable account visitor key so history, preferences and favorites are separated per account.
+- Registration migrates the current browser's anonymous history/preferences into the new account.
+- Favorites are now scoped by account/visitor key.
+- iTunes search now follows the selected music language market (TW/US/JP/KR), translates genre-only searches such as `獨立音樂` -> `indie` for non-Chinese markets, and filters Western results to remove CJK-titled results.
+- Wrapped the Chart.js canvas in a fixed-height container to stop the history chart from expanding vertically.
+- Extended Supabase/MySQL/SQLite schemas and migrations for account fields and per-user favorites.

@@ -5,16 +5,21 @@ import uuid
 from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.exceptions import BadRequest
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import (
+    create_user,
     fetch_favorite_songs,
     fetch_history,
+    fetch_user_by_email,
+    fetch_user_by_id,
     fetch_preferences,
     fetch_song_leaderboard,
     fetch_trends,
     save_analysis,
     save_favorite_song,
     save_preferences,
+    migrate_visitor_to_account,
 )
 from mood_analysis import analyze_mood, build_platform_links, recommendation_terms
 from music_api import fetch_top_songs, search_tracks
@@ -112,36 +117,68 @@ def build_weekly_report(rows):
 
 
 def get_recommendations(mood, context, song, preferences=None):
-    recommendations = []
-    seen = {song.get("track_id")}
-    terms = []
-    if preferences:
-        if preferences.get("kpop_group"):
-            terms.append(preferences["kpop_group"])
-        elif preferences.get("favorite_genre"):
-            terms.append(preferences["favorite_genre"])
-    terms.extend(recommendation_terms(mood, context, song))
+    """Return a coherent, fast recommendation set.
 
-    for term in terms:
+    First ask iTunes once for the selected artist/group, which intentionally allows
+    multiple songs by the same artist. Only when that cannot fill the set do we make
+    one fallback search using the user's preference or mood/context terms.
+    """
+    recommendations = []
+    seen = {str(song.get("track_id") or "")}
+    prefs = preferences or {}
+    language = prefs.get("music_language")
+    genre = prefs.get("favorite_genre")
+
+    artist = (song.get("artist_name") or "").strip()
+    terms = []
+    if artist:
+        terms.append(artist)
+    fallback = prefs.get("kpop_group") or genre
+    if fallback and fallback.casefold() != artist.casefold():
+        terms.append(fallback)
+    for term in recommendation_terms(mood, context, song):
+        if term and all(term.casefold() != existing.casefold() for existing in terms):
+            terms.append(term)
+
+    # At most two network searches: artist first, then one fallback. This keeps the
+    # analyze action responsive while still filling recommendations when possible.
+    for term in terms[:2]:
         try:
-            tracks = search_tracks(term, limit=3)
+            tracks = search_tracks(
+                term,
+                limit=8,
+                music_language=language,
+                favorite_genre=genre,
+            )
         except Exception:
             continue
         for track in tracks:
-            track_id = track.get("track_id")
-            if track_id in seen:
+            track_id = str(track.get("track_id") or "")
+            signature = f"{track.get('track_name','')}|{track.get('artist_name','')}".casefold()
+            if track_id in seen or signature in seen:
                 continue
             recommendations.append(track)
             seen.add(track_id)
-            if len(recommendations) == 3:
+            seen.add(signature)
+            if len(recommendations) == 4:
                 return recommendations
     return recommendations
 
 
 @app.before_request
 def ensure_visitor_id():
-    if "visitor_id" not in session:
+    if session.get("user_id"):
+        session["visitor_id"] = f"user:{session['user_id']}"
+    elif "visitor_id" not in session:
         session["visitor_id"] = uuid.uuid4().hex
+
+
+@app.context_processor
+def inject_current_user():
+    user = None
+    if session.get("user_id"):
+        user, _ = fetch_user_by_id(session["user_id"])
+    return {"current_user": user}
 
 
 @app.get("/")
@@ -218,8 +255,13 @@ def api_search():
     limit = request.args.get("limit", 8, type=int)
     limit = max(1, min(limit or 8, 12))
     try:
-        tracks = search_tracks(term, limit=limit)
-        return jsonify({"tracks": tracks})
+        preferences_data, _ = fetch_preferences(session["visitor_id"])
+        tracks = search_tracks(
+            term, limit=limit,
+            music_language=(preferences_data or {}).get("music_language"),
+            favorite_genre=(preferences_data or {}).get("favorite_genre"),
+        )
+        return jsonify({"tracks": tracks, "music_language": (preferences_data or {}).get("music_language")})
     except Exception as exc:
         return jsonify({"error": f"搜尋暫時失敗：{exc}"}), 502
 
@@ -331,15 +373,80 @@ def add_favorite():
         flash("收藏失敗，歌曲資料不完整。")
         return redirect(next_url)
 
-    ok, error = save_favorite_song(song)
+    ok, error = save_favorite_song(song, visitor_id=session["visitor_id"])
     flash("已加入收藏。" if ok and not error else f"收藏失敗：{error}")
     return redirect(next_url)
 
 
 @app.get("/favorites")
 def favorites():
-    songs, error = fetch_favorite_songs()
+    songs, error = fetch_favorite_songs(visitor_id=session["visitor_id"])
     return render_template("favorites.html", songs=songs, error=error)
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if session.get("user_id"):
+        return redirect(url_for("index"))
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        display_name = request.form.get("display_name", "").strip()[:80]
+        password = request.form.get("password", "")
+        if "@" not in email or len(email) > 255:
+            flash("請輸入有效的 Email。")
+        elif not display_name:
+            flash("請輸入顯示名稱。")
+        elif len(password) < 8:
+            flash("密碼至少需要 8 個字元。")
+        else:
+            existing, error = fetch_user_by_email(email)
+            if error:
+                flash(f"註冊暫時失敗：{error}")
+            elif existing:
+                flash("這個 Email 已經註冊，請直接登入。")
+            else:
+                old_visitor_id = session.get("visitor_id")
+                user_id, error = create_user(email, display_name, generate_password_hash(password))
+                if user_id:
+                    account_visitor_id = f"user:{user_id}"
+                    if old_visitor_id:
+                        migrate_visitor_to_account(old_visitor_id, account_visitor_id)
+                    session.clear()
+                    session["user_id"] = user_id
+                    session["visitor_id"] = account_visitor_id
+                    flash("註冊完成，已登入 MoodTune。")
+                    return redirect(url_for("index"))
+                flash(f"註冊失敗：{error}")
+    return render_template("auth.html", mode="register")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("user_id"):
+        return redirect(url_for("index"))
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        user, error = fetch_user_by_email(email)
+        if error:
+            flash(f"登入暫時失敗：{error}")
+        elif not user or not user.get("password_hash") or not check_password_hash(user["password_hash"], password):
+            flash("Email 或密碼不正確。")
+        else:
+            session.clear()
+            session["user_id"] = user["id"]
+            session["visitor_id"] = f"user:{user['id']}"
+            flash(f"歡迎回來，{user.get('display_name') or 'MoodTune 使用者'}。")
+            return redirect(url_for("index"))
+    return render_template("auth.html", mode="login")
+
+
+@app.post("/logout")
+def logout():
+    session.clear()
+    session["visitor_id"] = uuid.uuid4().hex
+    flash("已登出。")
+    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":

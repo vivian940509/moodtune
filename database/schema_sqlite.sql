@@ -1,6 +1,8 @@
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE,
   display_name TEXT,
+  password_hash TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -64,6 +66,7 @@ CREATE TABLE IF NOT EXISTS analysis_results (
 
 CREATE TABLE IF NOT EXISTS favorite_songs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  visitor_id TEXT,
   itunes_track_id TEXT,
   track_name TEXT NOT NULL,
   artist_name TEXT NOT NULL,
@@ -76,5 +79,5 @@ CREATE TABLE IF NOT EXISTS favorite_songs (
   spotify_url TEXT,
   soundcloud_url TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(track_name, artist_name)
+  UNIQUE(visitor_id, track_name, artist_name)
 );

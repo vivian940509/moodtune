@@ -48,7 +48,7 @@
         </select>
       </label>
     </div>
-    <canvas id="moodTrendChart" data-chart='{{ chart|tojson }}'></canvas>
+    <div class="chart-canvas-wrap"><canvas id="moodTrendChart" data-chart='{{ chart|tojson }}'></canvas></div>
   </article>
 
   {% if weekly_report %}

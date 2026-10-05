@@ -67,6 +67,18 @@ def _initialize_sqlite(engine):
         for column_name, statement in sqlite_migrations.items():
             if column_name not in existing_columns:
                 connection.execute(text(statement))
+        user_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(users)"))}
+        for column_name, statement in {
+            "email": "ALTER TABLE users ADD COLUMN email TEXT",
+            "password_hash": "ALTER TABLE users ADD COLUMN password_hash TEXT",
+        }.items():
+            if column_name not in user_columns:
+                connection.execute(text(statement))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email ON users (email)"))
+        favorite_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(favorite_songs)"))}
+        if "visitor_id" not in favorite_columns:
+            connection.execute(text("ALTER TABLE favorite_songs ADD COLUMN visitor_id TEXT"))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_favorite_owner_song ON favorite_songs (visitor_id, track_name, artist_name)"))
         connection.execute(
             text(
                 "CREATE INDEX IF NOT EXISTS idx_mood_entries_visitor_created "
@@ -340,10 +352,11 @@ def fetch_song_leaderboard(limit=10):
         return [], str(exc)
 
 
-def save_favorite_song(song):
+def save_favorite_song(song, visitor_id=None):
     try:
         with db_connection() as connection:
             params = {
+                "visitor_id": visitor_id,
                 "track_id": song.get("track_id"),
                 "track_name": song.get("track_name"),
                 "artist_name": song.get("artist_name"),
@@ -359,26 +372,26 @@ def save_favorite_song(song):
             if connection.dialect.name == "postgresql":
                 statement = """
                     INSERT INTO favorite_songs (
-                        itunes_track_id, track_name, artist_name, album_name, genre,
+                        visitor_id, itunes_track_id, track_name, artist_name, album_name, genre,
                         artwork_url, preview_url, apple_music_url, youtube_music_url,
                         spotify_url, soundcloud_url
                     )
                     VALUES (
-                        :track_id, :track_name, :artist_name, :album_name, :genre,
+                        :visitor_id, :track_id, :track_name, :artist_name, :album_name, :genre,
                         :artwork_url, :preview_url, :apple_music_url, :youtube_music_url,
                         :spotify_url, :soundcloud_url
                     )
-                    ON CONFLICT (track_name, artist_name) DO NOTHING
+                    ON CONFLICT (visitor_id, track_name, artist_name) DO NOTHING
                 """
             elif connection.dialect.name == "mysql":
                 statement = """
                     INSERT IGNORE INTO favorite_songs (
-                        itunes_track_id, track_name, artist_name, album_name, genre,
+                        visitor_id, itunes_track_id, track_name, artist_name, album_name, genre,
                         artwork_url, preview_url, apple_music_url, youtube_music_url,
                         spotify_url, soundcloud_url
                     )
                     VALUES (
-                        :track_id, :track_name, :artist_name, :album_name, :genre,
+                        :visitor_id, :track_id, :track_name, :artist_name, :album_name, :genre,
                         :artwork_url, :preview_url, :apple_music_url, :youtube_music_url,
                         :spotify_url, :soundcloud_url
                     )
@@ -386,12 +399,12 @@ def save_favorite_song(song):
             else:
                 statement = """
                     INSERT OR IGNORE INTO favorite_songs (
-                        itunes_track_id, track_name, artist_name, album_name, genre,
+                        visitor_id, itunes_track_id, track_name, artist_name, album_name, genre,
                         artwork_url, preview_url, apple_music_url, youtube_music_url,
                         spotify_url, soundcloud_url
                     )
                     VALUES (
-                        :track_id, :track_name, :artist_name, :album_name, :genre,
+                        :visitor_id, :track_id, :track_name, :artist_name, :album_name, :genre,
                         :artwork_url, :preview_url, :apple_music_url, :youtube_music_url,
                         :spotify_url, :soundcloud_url
                     )
@@ -402,12 +415,17 @@ def save_favorite_song(song):
         return False, str(exc)
 
 
-def fetch_favorite_songs(limit=50):
+def fetch_favorite_songs(limit=50, visitor_id=None):
     try:
         with db_connection() as connection:
+            visitor_filter = "visitor_id IS NULL"
+            params = {"limit": limit}
+            if visitor_id is not None:
+                visitor_filter = "visitor_id = :visitor_id"
+                params["visitor_id"] = visitor_id
             rows = connection.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         id,
                         itunes_track_id,
@@ -423,12 +441,61 @@ def fetch_favorite_songs(limit=50):
                         soundcloud_url,
                         created_at
                     FROM favorite_songs
+                    WHERE {visitor_filter}
                     ORDER BY created_at DESC
                     LIMIT :limit
                     """
                 ),
-                {"limit": limit},
+                params,
             )
             return [dict(row._mapping) for row in rows], None
     except SQLAlchemyError as exc:
         return [], str(exc)
+
+# --- Account helpers (v2) ---
+def create_user(email, display_name, password_hash):
+    try:
+        with db_connection() as connection:
+            user_id = _insert_and_get_id(connection, """
+                INSERT INTO users (email, display_name, password_hash)
+                VALUES (:email, :display_name, :password_hash)
+            """, {"email": email.lower().strip(), "display_name": display_name.strip(), "password_hash": password_hash})
+            return user_id, None
+    except SQLAlchemyError as exc:
+        return None, str(exc)
+
+
+def fetch_user_by_email(email):
+    try:
+        with db_connection() as connection:
+            row = connection.execute(text("""
+                SELECT id, email, display_name, password_hash FROM users WHERE LOWER(email) = :email
+            """), {"email": email.lower().strip()}).first()
+            return (dict(row._mapping) if row else None), None
+    except SQLAlchemyError as exc:
+        return None, str(exc)
+
+
+def fetch_user_by_id(user_id):
+    try:
+        with db_connection() as connection:
+            row = connection.execute(text("""
+                SELECT id, email, display_name FROM users WHERE id = :id
+            """), {"id": user_id}).first()
+            return (dict(row._mapping) if row else None), None
+    except SQLAlchemyError as exc:
+        return None, str(exc)
+
+
+def migrate_visitor_to_account(old_visitor_id, account_visitor_id):
+    """Move this browser's pre-login history/preferences into the newly registered account."""
+    try:
+        with db_connection() as connection:
+            connection.execute(text("UPDATE mood_entries SET visitor_id=:new WHERE visitor_id=:old"), {"new": account_visitor_id, "old": old_visitor_id})
+            old_pref = connection.execute(text("SELECT music_language, favorite_genre, kpop_group FROM user_preferences WHERE visitor_id=:old"), {"old": old_visitor_id}).first()
+            if old_pref:
+                connection.execute(text("DELETE FROM user_preferences WHERE visitor_id=:new"), {"new": account_visitor_id})
+                connection.execute(text("UPDATE user_preferences SET visitor_id=:new WHERE visitor_id=:old"), {"new": account_visitor_id, "old": old_visitor_id})
+            return True, None
+    except SQLAlchemyError as exc:
+        return False, str(exc)

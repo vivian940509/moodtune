@@ -145,3 +145,19 @@ Run `database/schema.sql` on the Railway database before using history.
 - Mood text, diary text, and history are associated with an anonymous browser session ID stored in Flask's signed session cookie.
 - The history page needs a reachable database. If saving fails, analysis still renders, but the result will not appear in `/history`.
 - Do not commit real `.env` values. Keep production secrets in Vercel, Railway, or Supabase settings.
+
+## 2026-10-05 升級：登入 / 個人紀錄 / 語言搜尋
+
+既有 Supabase 部署請在重新部署前，再執行一次：
+
+```sql
+database/migrate_mood_journal_supabase.sql
+```
+
+這次 migration 會新增帳號登入需要的 `users.email`、`users.password_hash`，並讓 `favorite_songs` 依使用者分開。
+全新 Supabase 可直接執行 `database/schema_supabase.sql`。
+
+既有 MySQL 若先前已經跑過 `migrate_mood_journal_mysql.sql`，再執行一次 `database/migrate_accounts_mysql.sql`。
+全新 MySQL 直接使用 `database/schema.sql`。
+
+部署後可到 `/register` 註冊、`/login` 登入。密碼只保存雜湊，不保存明碼。

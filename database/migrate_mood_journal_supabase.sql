@@ -14,3 +14,12 @@ ALTER TABLE mood_entries ADD COLUMN IF NOT EXISTS diary_text TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_mood_entries_visitor_created
 ON mood_entries (visitor_id, created_at DESC);
+
+-- v2: accounts and per-account favorites
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email ON users (email);
+ALTER TABLE favorite_songs ADD COLUMN IF NOT EXISTS visitor_id VARCHAR(64);
+ALTER TABLE favorite_songs DROP CONSTRAINT IF EXISTS uq_favorite_song;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_favorite_owner_song
+ON favorite_songs (visitor_id, track_name, artist_name);

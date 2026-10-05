@@ -16,6 +16,13 @@
         <a href="{{ url_for('leaderboard') }}">排行榜</a>
         <a href="{{ url_for('favorites') }}">收藏</a>
         <a href="{{ url_for('preferences') }}">音樂偏好</a>
+        {% if current_user %}
+        <span class="nav-user">{{ current_user.display_name }}</span>
+        <form class="nav-form" method="post" action="{{ url_for('logout') }}"><button type="submit">登出</button></form>
+        {% else %}
+        <a href="{{ url_for('login') }}">登入</a>
+        <a class="nav-register" href="{{ url_for('register') }}">註冊</a>
+        {% endif %}
       </nav>
     </header>
     <main>

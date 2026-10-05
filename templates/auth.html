@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}MoodTune｜{% if mode == 'register' %}註冊{% else %}登入{% endif %}{% endblock %}
+{% block content %}
+<section class="auth-wrap">
+  <form class="panel auth-card" method="post">
+    <p class="eyebrow">MoodTune Account</p>
+    <h1>{% if mode == 'register' %}建立你的帳號{% else %}登入你的帳號{% endif %}</h1>
+    <p class="lede">登入後，你的情緒紀錄、音樂偏好與收藏會跟著自己的帳號分開保存。</p>
+    {% if mode == 'register' %}
+    <label class="field-label" for="display_name">顯示名稱</label>
+    <input id="display_name" name="display_name" maxlength="80" required autocomplete="name" placeholder="例如：小明">
+    {% endif %}
+    <label class="field-label" for="email">Email</label>
+    <input id="email" name="email" type="email" maxlength="255" required autocomplete="email" placeholder="you@example.com">
+    <label class="field-label" for="password">密碼</label>
+    <input id="password" name="password" type="password" minlength="8" required autocomplete="{% if mode == 'register' %}new-password{% else %}current-password{% endif %}" placeholder="至少 8 個字元">
+    <button class="primary" type="submit">{% if mode == 'register' %}註冊並登入{% else %}登入{% endif %}</button>
+    <p class="auth-switch">
+      {% if mode == 'register' %}已經有帳號？ <a href="{{ url_for('login') }}">前往登入</a>{% else %}還沒有帳號？ <a href="{{ url_for('register') }}">免費註冊</a>{% endif %}
+    </p>
+  </form>
+</section>
+{% endblock %}

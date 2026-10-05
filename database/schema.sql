@@ -1,6 +1,9 @@
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(255) NULL,
   display_name VARCHAR(80) NULL,
+  password_hash VARCHAR(255) NULL,
+  UNIQUE KEY uq_users_email (email),
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -66,6 +69,7 @@ CREATE TABLE IF NOT EXISTS analysis_results (
 
 CREATE TABLE IF NOT EXISTS favorite_songs (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  visitor_id VARCHAR(64) NULL,
   itunes_track_id VARCHAR(64) NULL,
   track_name VARCHAR(255) NOT NULL,
   artist_name VARCHAR(255) NOT NULL,
@@ -78,5 +82,5 @@ CREATE TABLE IF NOT EXISTS favorite_songs (
   spotify_url TEXT NULL,
   soundcloud_url TEXT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_favorite_song (track_name, artist_name)
+  UNIQUE KEY uq_favorite_song (visitor_id, track_name, artist_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

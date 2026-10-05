@@ -114,3 +114,16 @@ moodText.addEventListener("input", () => {
   }
   moodSuggestion.textContent = `文字看起來接近「${match.mood}」，需要時可以手動修改。`;
 });
+
+
+const analysisForm = document.querySelector("form.workspace");
+if (analysisForm) {
+  analysisForm.addEventListener("submit", () => {
+    if (analyzeButton && !analyzeButton.disabled) {
+      analyzeButton.disabled = true;
+      analyzeButton.dataset.originalText = analyzeButton.textContent;
+      analyzeButton.textContent = "正在分析並找推薦歌曲…";
+      if (searchHint) searchHint.textContent = "正在整理你的心情與推薦歌曲，請稍候…";
+    }
+  });
+}
