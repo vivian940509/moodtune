@@ -199,6 +199,13 @@ def test_analyze_route_redirects_when_song_missing():
     assert response.headers["Location"].endswith("/")
 
 
+def test_analyze_get_redirects_instead_of_returning_method_not_allowed():
+    response = app.test_client().get("/analyze")
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+
+
 def test_first_visit_redirects_to_music_preferences(monkeypatch, tmp_path):
     database_path = tmp_path / "moodtune-first-visit.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
@@ -269,6 +276,7 @@ def test_analyze_route_shows_external_platform_links(monkeypatch, tmp_path):
     assert "YouTube Music".encode() in response.data
     assert "Spotify".encode() in response.data
     assert b"music.youtube.com/search" in response.data
+    assert b"shareShareCard" in response.data
 
 
 def test_history_page_shows_chart_and_weekly_report(monkeypatch, tmp_path):

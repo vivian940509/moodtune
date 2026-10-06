@@ -1,5 +1,6 @@
 const canvas = document.querySelector("#shareCanvas");
 const downloadButton = document.querySelector("#downloadShareCard");
+const shareButton = document.querySelector("#shareShareCard");
 
 function fitText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
   const words = String(text || "").split("");
@@ -127,12 +128,63 @@ if (canvas) {
   drawShareCard();
 }
 
+async function canvasBlob() {
+  await drawShareCard();
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("分享卡產生失敗"))), "image/png");
+  });
+}
+
+async function downloadShareCard() {
+  const blob = await canvasBlob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.download = "moodtune-share-card.png";
+  link.href = url;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function shareShareCard() {
+  const blob = await canvasBlob();
+  const file = new File([blob], "moodtune-share-card.png", { type: "image/png" });
+  const canShareFile = navigator.canShare ? navigator.canShare({ files: [file] }) : false;
+
+  if (navigator.share && canShareFile) {
+    await navigator.share({
+      title: "MoodTune 聽歌心情卡",
+      text: "我的今日聽歌心情參考",
+      files: [file],
+    });
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, "_blank", "noopener");
+  if (!opened) window.location.href = url;
+  alert("目前瀏覽器不支援直接分享，圖片已開啟；請長按圖片儲存或分享。\nLINE 內建瀏覽器也請使用這個方式。" );
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
 if (downloadButton && canvas) {
   downloadButton.addEventListener("click", async () => {
     await drawShareCard();
-    const link = document.createElement("a");
-    link.download = "moodtune-share-card.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    try {
+      await downloadShareCard();
+    } catch (error) {
+      alert(error.message || "分享卡下載失敗，請稍後再試。" );
+    }
+  });
+}
+
+if (shareButton && canvas) {
+  shareButton.addEventListener("click", async () => {
+    try {
+      await shareShareCard();
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        alert(error.message || "分享卡分享失敗，請改用下載功能。" );
+      }
+    }
   });
 }

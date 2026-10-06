@@ -392,6 +392,13 @@ audio {
   gap: 16px;
 }
 
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
 #shareCanvas {
   width: 100%;
   max-width: 360px;

@@ -293,6 +293,13 @@ def api_search():
         return jsonify({"error": f"搜尋暫時失敗：{exc}"}), 502
 
 
+@app.get("/analyze")
+def analyze_get():
+    """Avoid a confusing 405 when a result URL is refreshed or opened directly."""
+    flash("請從分析頁重新選擇歌曲並送出分析。")
+    return redirect(url_for("index"))
+
+
 @app.post("/analyze")
 def analyze():
     mood = request.form.get("mood", "平靜")

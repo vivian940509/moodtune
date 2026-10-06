@@ -86,7 +86,10 @@
       data-profile="{{ result.music_profile }}"
       data-artwork="{{ song.artwork_url }}"
     ></canvas>
-    <button class="primary" id="downloadShareCard" type="button">下載分享卡</button>
+    <div class="share-actions">
+      <button class="primary" id="downloadShareCard" type="button">下載分享卡</button>
+      <button class="secondary-action" id="shareShareCard" type="button">分享圖片</button>
+    </div>
   </article>
 
   {% if recommendations %}
