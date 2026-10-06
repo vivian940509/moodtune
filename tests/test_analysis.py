@@ -2,10 +2,13 @@ import json
 
 from mood_analysis import analyze_mood, normalize_itunes_track
 from database import (
+    create_user_and_migrate,
     fetch_favorite_songs,
     fetch_history,
     fetch_preferences,
     fetch_song_leaderboard,
+    fetch_user_by_email,
+    get_engine,
     get_database_url,
     save_analysis,
     save_favorite_song,
@@ -91,6 +94,60 @@ def test_database_url_normalizes_supabase_postgres_driver(monkeypatch):
         get_database_url()
         == "postgresql+psycopg2://postgres.project-ref:pass@aws.pooler.supabase.com:6543/postgres"
     )
+
+
+def test_database_engine_is_reused_for_same_database_url(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-engine-cache.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+
+    assert get_engine() is get_engine()
+
+
+def test_create_user_and_migrate_uses_normalized_email_and_moves_preferences(
+    monkeypatch, tmp_path
+):
+    database_path = tmp_path / "moodtune-account-migration.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    old_visitor_id = "anonymous-before-register"
+    ok, error = save_preferences(
+        visitor_id=old_visitor_id,
+        music_language="華語",
+        favorite_genre="流行",
+    )
+    assert ok is True
+    assert error is None
+
+    user_id, create_error = create_user_and_migrate(
+        email="  USER@EXAMPLE.COM ",
+        display_name="測試使用者",
+        password_hash="test-hash",
+        old_visitor_id=old_visitor_id,
+    )
+    user, fetch_error = fetch_user_by_email("user@example.com")
+    preferences, preference_error = fetch_preferences(f"user:{user_id}")
+
+    assert create_error is None
+    assert fetch_error is None
+    assert preference_error is None
+    assert user["email"] == "user@example.com"
+    assert preferences["favorite_genre"] == "流行"
+
+
+def test_create_user_and_migrate_reports_duplicate_email(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-duplicate-account.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+
+    first_user_id, first_error = create_user_and_migrate(
+        "user@example.com", "第一位", "hash-1"
+    )
+    duplicate_user_id, duplicate_error = create_user_and_migrate(
+        "USER@example.com", "第二位", "hash-2"
+    )
+
+    assert first_user_id is not None
+    assert first_error is None
+    assert duplicate_user_id is None
+    assert duplicate_error == "duplicate_email"
 
 
 def test_sqlite_database_auto_initializes_and_persists_history(monkeypatch, tmp_path):

@@ -1,25 +1,24 @@
 import json
 import os
 import uuid
+from time import perf_counter
 
 from dotenv import load_dotenv
-from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.exceptions import BadRequest
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import (
-    create_user,
+    create_user_and_migrate,
     fetch_favorite_songs,
     fetch_history,
     fetch_user_by_email,
-    fetch_user_by_id,
     fetch_preferences,
     fetch_song_leaderboard,
     fetch_trends,
     save_analysis,
     save_favorite_song,
     save_preferences,
-    migrate_visitor_to_account,
 )
 from mood_analysis import analyze_mood, build_platform_links, recommendation_terms
 from music_api import fetch_top_songs, search_tracks
@@ -166,18 +165,46 @@ def get_recommendations(mood, context, song, preferences=None):
 
 
 @app.before_request
-def ensure_visitor_id():
+def prepare_request():
+    g.request_started_at = perf_counter()
     if session.get("user_id"):
         session["visitor_id"] = f"user:{session['user_id']}"
     elif "visitor_id" not in session:
         session["visitor_id"] = uuid.uuid4().hex
 
 
+@app.after_request
+def record_request_timing(response):
+    started_at = getattr(g, "request_started_at", None)
+    if started_at is None:
+        return response
+    duration_ms = (perf_counter() - started_at) * 1000
+    response.headers["Server-Timing"] = f"app;dur={duration_ms:.1f}"
+    if os.getenv("VERCEL") or os.getenv("PERFORMANCE_LOGS") == "1":
+        print(
+            json.dumps(
+                {
+                    "event": "request_timing",
+                    "route": request.path,
+                    "method": request.method,
+                    "status": response.status_code,
+                    "duration_ms": round(duration_ms, 1),
+                    "request_id": request.headers.get("x-vercel-id"),
+                }
+            ),
+            flush=True,
+        )
+    return response
+
+
 @app.context_processor
 def inject_current_user():
     user = None
     if session.get("user_id"):
-        user, _ = fetch_user_by_id(session["user_id"])
+        user = {
+            "id": session["user_id"],
+            "display_name": session.get("display_name") or "MoodTune 使用者",
+        }
     return {"current_user": user}
 
 
@@ -399,23 +426,24 @@ def register():
         elif len(password) < 8:
             flash("密碼至少需要 8 個字元。")
         else:
-            existing, error = fetch_user_by_email(email)
-            if error:
-                flash(f"註冊暫時失敗：{error}")
-            elif existing:
+            old_visitor_id = session.get("visitor_id")
+            user_id, error = create_user_and_migrate(
+                email=email,
+                display_name=display_name,
+                password_hash=generate_password_hash(password),
+                old_visitor_id=old_visitor_id,
+            )
+            if error == "duplicate_email":
                 flash("這個 Email 已經註冊，請直接登入。")
+            elif user_id:
+                account_visitor_id = f"user:{user_id}"
+                session.clear()
+                session["user_id"] = user_id
+                session["display_name"] = display_name
+                session["visitor_id"] = account_visitor_id
+                flash("註冊完成，已登入 MoodTune。")
+                return redirect(url_for("index"))
             else:
-                old_visitor_id = session.get("visitor_id")
-                user_id, error = create_user(email, display_name, generate_password_hash(password))
-                if user_id:
-                    account_visitor_id = f"user:{user_id}"
-                    if old_visitor_id:
-                        migrate_visitor_to_account(old_visitor_id, account_visitor_id)
-                    session.clear()
-                    session["user_id"] = user_id
-                    session["visitor_id"] = account_visitor_id
-                    flash("註冊完成，已登入 MoodTune。")
-                    return redirect(url_for("index"))
                 flash(f"註冊失敗：{error}")
     return render_template("auth.html", mode="register")
 
@@ -435,6 +463,7 @@ def login():
         else:
             session.clear()
             session["user_id"] = user["id"]
+            session["display_name"] = user.get("display_name") or "MoodTune 使用者"
             session["visitor_id"] = f"user:{user['id']}"
             flash(f"歡迎回來，{user.get('display_name') or 'MoodTune 使用者'}。")
             return redirect(url_for("index"))

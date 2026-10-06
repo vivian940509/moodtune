@@ -1,10 +1,12 @@
+import json
 import os
 from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
+from time import perf_counter
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.pool import NullPool
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -23,14 +25,17 @@ def get_database_url():
     return database_url
 
 
-def get_engine():
-    database_url = get_database_url()
+@lru_cache(maxsize=4)
+def _build_engine(database_url):
     if database_url.startswith("postgresql+psycopg2://"):
         return create_engine(
             database_url,
-            connect_args={"sslmode": "require"},
+            connect_args={"sslmode": "require", "connect_timeout": 3},
+            pool_size=1,
+            max_overflow=0,
+            pool_timeout=5,
+            pool_recycle=300,
             pool_pre_ping=True,
-            poolclass=NullPool,
             future=True,
         )
     if database_url.startswith("sqlite:///"):
@@ -38,6 +43,27 @@ def get_engine():
         database_path.parent.mkdir(parents=True, exist_ok=True)
         return create_engine(database_url, pool_pre_ping=True, future=True)
     return create_engine(database_url, pool_pre_ping=True, future=True)
+
+
+def get_engine():
+    """Reuse one small connection pool per database URL on warm instances."""
+    return _build_engine(get_database_url())
+
+
+def _log_database_timing(engine, checkout_ms, total_ms):
+    if not (os.getenv("VERCEL") or os.getenv("PERFORMANCE_LOGS") == "1"):
+        return
+    print(
+        json.dumps(
+            {
+                "event": "database_timing",
+                "dialect": engine.url.get_backend_name(),
+                "checkout_ms": round(checkout_ms, 1),
+                "total_ms": round(total_ms, 1),
+            }
+        ),
+        flush=True,
+    )
 
 
 def _initialize_sqlite(engine):
@@ -90,12 +116,23 @@ def _initialize_sqlite(engine):
 
 @contextmanager
 def db_connection():
+    started_at = perf_counter()
     engine = get_engine()
     _initialize_sqlite(engine)
-    with engine.begin() as connection:
-        if connection.dialect.name == "sqlite":
-            connection.execute(text("PRAGMA foreign_keys = ON"))
-        yield connection
+    checkout_started_at = perf_counter()
+    checkout_ms = 0.0
+    try:
+        with engine.begin() as connection:
+            checkout_ms = (perf_counter() - checkout_started_at) * 1000
+            if connection.dialect.name == "sqlite":
+                connection.execute(text("PRAGMA foreign_keys = ON"))
+            yield connection
+    finally:
+        _log_database_timing(
+            engine,
+            checkout_ms=checkout_ms,
+            total_ms=(perf_counter() - started_at) * 1000,
+        )
 
 
 def _insert_and_get_id(connection, statement, params):
@@ -465,11 +502,63 @@ def create_user(email, display_name, password_hash):
         return None, str(exc)
 
 
+def _migrate_visitor_on_connection(connection, old_visitor_id, account_visitor_id):
+    connection.execute(
+        text("UPDATE mood_entries SET visitor_id=:new WHERE visitor_id=:old"),
+        {"new": account_visitor_id, "old": old_visitor_id},
+    )
+    old_pref = connection.execute(
+        text(
+            "SELECT music_language, favorite_genre, kpop_group "
+            "FROM user_preferences WHERE visitor_id=:old"
+        ),
+        {"old": old_visitor_id},
+    ).first()
+    if old_pref:
+        connection.execute(
+            text("DELETE FROM user_preferences WHERE visitor_id=:new"),
+            {"new": account_visitor_id},
+        )
+        connection.execute(
+            text("UPDATE user_preferences SET visitor_id=:new WHERE visitor_id=:old"),
+            {"new": account_visitor_id, "old": old_visitor_id},
+        )
+
+
+def create_user_and_migrate(email, display_name, password_hash, old_visitor_id=None):
+    """Create an account and migrate anonymous data in one transaction/checkout."""
+    try:
+        with db_connection() as connection:
+            user_id = _insert_and_get_id(
+                connection,
+                """
+                INSERT INTO users (email, display_name, password_hash)
+                VALUES (:email, :display_name, :password_hash)
+                """,
+                {
+                    "email": email.lower().strip(),
+                    "display_name": display_name.strip(),
+                    "password_hash": password_hash,
+                },
+            )
+            if old_visitor_id:
+                _migrate_visitor_on_connection(
+                    connection,
+                    old_visitor_id=old_visitor_id,
+                    account_visitor_id=f"user:{user_id}",
+                )
+            return user_id, None
+    except IntegrityError:
+        return None, "duplicate_email"
+    except SQLAlchemyError as exc:
+        return None, str(exc)
+
+
 def fetch_user_by_email(email):
     try:
         with db_connection() as connection:
             row = connection.execute(text("""
-                SELECT id, email, display_name, password_hash FROM users WHERE LOWER(email) = :email
+                SELECT id, email, display_name, password_hash FROM users WHERE email = :email
             """), {"email": email.lower().strip()}).first()
             return (dict(row._mapping) if row else None), None
     except SQLAlchemyError as exc:
@@ -491,11 +580,11 @@ def migrate_visitor_to_account(old_visitor_id, account_visitor_id):
     """Move this browser's pre-login history/preferences into the newly registered account."""
     try:
         with db_connection() as connection:
-            connection.execute(text("UPDATE mood_entries SET visitor_id=:new WHERE visitor_id=:old"), {"new": account_visitor_id, "old": old_visitor_id})
-            old_pref = connection.execute(text("SELECT music_language, favorite_genre, kpop_group FROM user_preferences WHERE visitor_id=:old"), {"old": old_visitor_id}).first()
-            if old_pref:
-                connection.execute(text("DELETE FROM user_preferences WHERE visitor_id=:new"), {"new": account_visitor_id})
-                connection.execute(text("UPDATE user_preferences SET visitor_id=:new WHERE visitor_id=:old"), {"new": account_visitor_id, "old": old_visitor_id})
+            _migrate_visitor_on_connection(
+                connection,
+                old_visitor_id=old_visitor_id,
+                account_visitor_id=account_visitor_id,
+            )
             return True, None
     except SQLAlchemyError as exc:
         return False, str(exc)
