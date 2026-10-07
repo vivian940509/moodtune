@@ -67,6 +67,7 @@ function renderTracks(tracks) {
       try {
         const response = await fetch("/api/feedback", {
           method: "POST",
+          credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ song: track, feedback_type: "tag_mismatch" }),
         });
