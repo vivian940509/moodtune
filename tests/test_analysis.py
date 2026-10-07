@@ -231,6 +231,8 @@ def test_kpop_preferences_are_saved_from_onboarding(monkeypatch, tmp_path):
     database_path = tmp_path / "moodtune-onboarding.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
     client = app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["visitor_id"] = "feedback-api-visitor"
 
     response = client.post(
         "/preferences",
@@ -261,7 +263,6 @@ def test_visitors_can_skip_preferences(monkeypatch, tmp_path):
 
     assert response.status_code == 200
     assert b'moodText' in response.data
-    assert b'moodText' in response.data
 
 
 def test_analyze_route_shows_external_platform_links(monkeypatch, tmp_path):
@@ -288,6 +289,26 @@ def test_analyze_route_shows_external_platform_links(monkeypatch, tmp_path):
     assert "Spotify".encode() in response.data
     assert b"music.youtube.com/search" in response.data
     assert b"shareShareCard" in response.data
+
+
+def test_song_feedback_api_records_tag_mismatch(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-feedback-api.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    client = app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["visitor_id"] = "feedback-api-visitor"
+    response = client.post(
+        "/api/feedback",
+        json={
+            "song": {"track_id": "api-1", "track_name": "標籤錯誤", "artist_name": "MoodTune", "genre": "抒情"},
+            "feedback_type": "tag_mismatch",
+        },
+    )
+    rows, error = fetch_song_feedback("feedback-api-visitor")
+
+    assert response.status_code == 200
+    assert error is None
+    assert rows[0]["feedback_type"] == "tag_mismatch"
 
 
 def test_history_page_shows_chart_and_weekly_report(monkeypatch, tmp_path):

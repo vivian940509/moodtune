@@ -287,6 +287,11 @@ button:disabled {
   margin-top: 18px;
 }
 
+.track-result {
+  display: grid;
+  gap: 5px;
+}
+
 .track-card {
   display: grid;
   grid-template-columns: 78px 1fr;
@@ -321,6 +326,20 @@ button:disabled {
   display: block;
   color: var(--muted);
   font-size: .9rem;
+}
+
+.track-feedback {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: .78rem;
+  text-align: right;
+}
+
+.track-feedback:hover,
+.track-feedback.is-saved {
+  color: var(--teal-dark);
 }
 
 fieldset {

@@ -43,6 +43,8 @@ function renderTracks(tracks) {
   }
   searchHint.textContent = "選一首最符合今天心情的歌。";
   tracks.forEach((track) => {
+    const result = document.createElement("div");
+    result.className = "track-result";
     const button = document.createElement("button");
     button.type = "button";
     button.className = "track-card";
@@ -55,7 +57,29 @@ function renderTracks(tracks) {
       </span>
     `;
     button.addEventListener("click", () => selectTrack(track, button));
-    trackResults.appendChild(button);
+    const feedbackButton = document.createElement("button");
+    feedbackButton.type = "button";
+    feedbackButton.className = "track-feedback";
+    feedbackButton.textContent = "標籤不符／少推薦這類";
+    feedbackButton.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      feedbackButton.disabled = true;
+      try {
+        const response = await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ song: track, feedback_type: "tag_mismatch" }),
+        });
+        if (!response.ok) throw new Error("回饋保存失敗");
+        feedbackButton.textContent = "已減少類似推薦";
+        feedbackButton.classList.add("is-saved");
+      } catch (error) {
+        feedbackButton.disabled = false;
+        feedbackButton.textContent = error.message;
+      }
+    });
+    result.append(button, feedbackButton);
+    trackResults.appendChild(result);
   });
 }
 

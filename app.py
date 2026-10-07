@@ -587,6 +587,17 @@ def feedback():
     return redirect(request.form.get("next") or url_for("index"))
 
 
+@app.post("/api/feedback")
+def api_feedback():
+    payload = request.get_json(silent=True) or {}
+    song = payload.get("song") if isinstance(payload.get("song"), dict) else {}
+    feedback_type = payload.get("feedback_type", "")
+    ok, error = save_song_feedback(session["visitor_id"], song, feedback_type)
+    if not ok:
+        return jsonify({"error": error or "回饋保存失敗。"}), 400
+    return jsonify({"ok": True})
+
+
 @app.post("/favorites/<int:favorite_id>/delete")
 def delete_favorite(favorite_id):
     ok, error = delete_favorite_song(
