@@ -328,13 +328,14 @@ def test_search_excludes_song_marked_as_tag_mismatch(monkeypatch, tmp_path):
         lambda *args, **kwargs: [
             {"track_id": "blocked-1", "track_name": "不想再看到", "artist_name": "MoodTune", "genre": "抒情"},
             {"track_id": "allowed-1", "track_name": "保留歌曲", "artist_name": "Other", "genre": "流行"},
+            {"track_id": "allowed-2", "track_name": "同曲風也可以", "artist_name": "Other", "genre": "抒情"},
         ],
     )
 
     response = client.get("/api/search?q=test")
 
     assert response.status_code == 200
-    assert [track["track_id"] for track in response.get_json()["tracks"]] == ["allowed-1"]
+    assert [track["track_id"] for track in response.get_json()["tracks"]] == ["allowed-1", "allowed-2"]
 
 
 def test_history_page_shows_chart_and_weekly_report(monkeypatch, tmp_path):

@@ -119,7 +119,7 @@ def filter_tracks_by_feedback(tracks, feedback):
     blocked_genres = {
         (row.get("genre") or "").casefold()
         for row in feedback
-        if row.get("feedback_type") in {"dislike", "tag_mismatch"} and row.get("genre")
+        if row.get("feedback_type") == "dislike" and row.get("genre")
     }
     filtered = []
     for track in tracks:
