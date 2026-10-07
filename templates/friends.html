@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}MoodTune｜好友與聊天{% endblock %}
+{% block content %}
+<section class="page-head"><p class="eyebrow">Friends</p><h1>好友與聊天</h1><p class="lede">找到一起聽歌的人，分享近況與心情。</p></section>
+<section class="social-layout">
+  <section class="panel"><h2>找好友</h2><form class="search-row" method="get"><input name="q" value="{{ query }}" placeholder="搜尋 Email 或顯示名稱"><button class="primary" type="submit">搜尋</button></form>{% for user in results %}<div class="user-row"><div><strong>{{ user.display_name or 'MoodTune 使用者' }}</strong><span>{{ user.email }}</span></div><form method="post"><input type="hidden" name="user_id" value="{{ user.id }}"><button class="secondary-action" type="submit">加好友</button></form></div>{% endfor %}</section>
+  <section class="panel"><h2>好友申請</h2>{% for user in pending %}<div class="user-row"><div><strong>{{ user.display_name }}</strong><span>{{ user.email }}</span></div><span><form class="inline-form" method="post" action="{{ url_for('friend_request_action', friendship_id=user.id, action='accept') }}"><button class="secondary-action" type="submit">接受</button></form><form class="inline-form" method="post" action="{{ url_for('friend_request_action', friendship_id=user.id, action='decline') }}"><button class="text-button" type="submit">略過</button></form></span></div>{% else %}<p class="muted">目前沒有新的好友申請。</p>{% endfor %}</section>
+</section>
+<section class="panel"><h2>我的好友</h2><div class="friend-grid">{% for friend in friends %}<a class="friend-card" href="{{ url_for('chat', friend_id=friend.id) }}"><strong>{{ friend.display_name or 'MoodTune 使用者' }}</strong><span>{{ friend.email }}</span><em>開始聊天 →</em></a>{% else %}<p class="muted">還沒有好友，先搜尋一位朋友吧。</p>{% endfor %}</div></section>
+{% endblock %}

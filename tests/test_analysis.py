@@ -4,6 +4,17 @@ from mood_analysis import analyze_mood, normalize_itunes_track
 from database import (
     create_user_and_migrate,
     fetch_favorite_songs,
+    delete_favorite_song,
+    fetch_friend_data,
+    fetch_journal_entries,
+    fetch_messages,
+    fetch_song_feedback,
+    respond_friend_request,
+    save_journal_entry,
+    search_users,
+    send_friend_request,
+    send_message,
+    save_song_feedback,
     fetch_history,
     fetch_preferences,
     fetch_song_leaderboard,
@@ -416,6 +427,36 @@ def test_favorite_songs_can_be_saved_and_listed(monkeypatch, tmp_path):
     assert songs[0]["track_name"] == "收藏之歌"
 
 
+def test_favorite_can_only_be_deleted_by_its_owner(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-favorite-delete.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    song = {
+        "track_id": "fav-delete-1",
+        "track_name": "可刪除的歌",
+        "artist_name": "MoodTune",
+    }
+
+    ok, error = save_favorite_song(song, visitor_id="owner")
+    songs, fetch_error = fetch_favorite_songs(visitor_id="owner")
+    wrong_owner_ok, wrong_owner_error = delete_favorite_song(
+        songs[0]["id"], visitor_id="someone-else"
+    )
+    deleted, delete_error = delete_favorite_song(
+        songs[0]["id"], visitor_id="owner"
+    )
+    remaining, remaining_error = fetch_favorite_songs(visitor_id="owner")
+
+    assert ok is True
+    assert error is None
+    assert fetch_error is None
+    assert wrong_owner_ok is False
+    assert wrong_owner_error is None
+    assert deleted is True
+    assert delete_error is None
+    assert remaining_error is None
+    assert remaining == []
+
+
 def test_favorites_page_renders(monkeypatch, tmp_path):
     database_path = tmp_path / "moodtune-favorites-page.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
@@ -423,3 +464,51 @@ def test_favorites_page_renders(monkeypatch, tmp_path):
 
     assert response.status_code == 200
     assert "我的收藏".encode() in response.data
+
+
+def test_standalone_journal_is_saved_per_visitor(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-journal.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+
+    entry_id, error = save_journal_entry("visitor-a", "今天", "我想慢慢休息。", "累")
+    own, own_error = fetch_journal_entries("visitor-a")
+    other, other_error = fetch_journal_entries("visitor-b")
+
+    assert entry_id is not None
+    assert error is None
+    assert own_error is None and other_error is None
+    assert own[0]["body"] == "我想慢慢休息。"
+    assert other == []
+
+
+def test_users_can_add_friends_and_chat(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-social.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    first, first_error = create_user_and_migrate("one@example.com", "第一位", "hash-1")
+    second, second_error = create_user_and_migrate("two@example.com", "第二位", "hash-2")
+
+    sent, request_error = send_friend_request(first, second)
+    (_, pending), pending_error = fetch_friend_data(second)
+    accepted, accept_error = respond_friend_request(pending[0]["id"], second, "accepted")
+    message_id, message_error = send_message(first, second, "今天一起聽歌嗎？")
+    messages, messages_error = fetch_messages(second, first)
+
+    assert first and second and first_error is None and second_error is None
+    assert sent is True and request_error is None
+    assert pending_error is None and len(pending) == 1
+    assert accepted is True and accept_error is None
+    assert message_id is not None and message_error is None
+    assert messages_error is None and messages[0]["body"] == "今天一起聽歌嗎？"
+
+
+def test_song_feedback_is_saved_for_recommendation_filtering(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-feedback.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    song = {"track_id": "feedback-1", "track_name": "不合口味", "artist_name": "某歌手", "genre": "電子"}
+
+    ok, error = save_song_feedback("visitor-a", song, "dislike")
+    rows, fetch_error = fetch_song_feedback("visitor-a")
+
+    assert ok is True
+    assert error is None and fetch_error is None
+    assert rows[0]["feedback_type"] == "dislike"

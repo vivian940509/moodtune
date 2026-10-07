@@ -1,7 +1,13 @@
 import json
 import os
 import uuid
-from time import perf_counter
+import csv
+import io
+import hashlib
+import secrets
+import smtplib
+from email.message import EmailMessage
+from time import perf_counter, time
 
 from dotenv import load_dotenv
 from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
@@ -11,6 +17,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from database import (
     create_user_and_migrate,
     fetch_favorite_songs,
+    fetch_song_feedback,
+    delete_favorite_song,
     fetch_history,
     fetch_user_by_email,
     fetch_preferences,
@@ -18,7 +26,20 @@ from database import (
     fetch_trends,
     save_analysis,
     save_favorite_song,
+    save_song_feedback,
     save_preferences,
+    save_journal_entry,
+    fetch_journal_entries,
+    search_users,
+    send_friend_request,
+    fetch_friend_data,
+    respond_friend_request,
+    send_message,
+    fetch_messages,
+    create_account_token,
+    consume_account_token,
+    mark_email_verified,
+    update_user_password,
 )
 from mood_analysis import analyze_mood, build_platform_links, recommendation_terms
 from music_api import fetch_top_songs, search_tracks
@@ -58,6 +79,29 @@ def ensure_platform_links(song):
     song.setdefault("genius_lyrics_url", links["genius_lyrics"])
     song.setdefault("google_lyrics_url", links["google_lyrics"])
     return song
+
+
+def make_account_token():
+    raw = secrets.token_urlsafe(32)
+    return raw, hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def send_account_email(recipient, subject, body):
+    smtp_host = os.getenv("SMTP_HOST")
+    if not smtp_host:
+        print(json.dumps({"event": "account_email_dev", "recipient": recipient, "subject": subject, "body": body}, ensure_ascii=False), flush=True)
+        return True
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = os.getenv("SMTP_FROM", os.getenv("SMTP_USER", "no-reply@moodtune.local"))
+    message["To"] = recipient
+    message.set_content(body)
+    with smtplib.SMTP(smtp_host, int(os.getenv("SMTP_PORT", "587")), timeout=10) as server:
+        server.starttls()
+        if os.getenv("SMTP_USER"):
+            server.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASSWORD", ""))
+        server.send_message(message)
+    return True
 
 
 def build_history_chart(rows):
@@ -115,7 +159,7 @@ def build_weekly_report(rows):
     }
 
 
-def get_recommendations(mood, context, song, preferences=None):
+def get_recommendations(mood, context, song, preferences=None, feedback=None):
     """Return a coherent, fast recommendation set.
 
     First ask iTunes once for the selected artist/group, which intentionally allows
@@ -127,6 +171,9 @@ def get_recommendations(mood, context, song, preferences=None):
     prefs = preferences or {}
     language = prefs.get("music_language")
     genre = prefs.get("favorite_genre")
+    feedback = feedback or []
+    disliked_artists = {row["artist_name"].casefold() for row in feedback if row["feedback_type"] == "dislike"}
+    disliked_genres = {row.get("genre", "").casefold() for row in feedback if row["feedback_type"] in {"dislike", "tag_mismatch"} and row.get("genre")}
 
     artist = (song.get("artist_name") or "").strip()
     terms = []
@@ -154,7 +201,9 @@ def get_recommendations(mood, context, song, preferences=None):
         for track in tracks:
             track_id = str(track.get("track_id") or "")
             signature = f"{track.get('track_name','')}|{track.get('artist_name','')}".casefold()
-            if track_id in seen or signature in seen:
+            artist_name = (track.get("artist_name") or "").casefold()
+            track_genre = (track.get("genre") or "").casefold()
+            if track_id in seen or signature in seen or artist_name in disliked_artists or track_genre in disliked_genres:
                 continue
             recommendations.append(track)
             seen.add(track_id)
@@ -326,6 +375,7 @@ def analyze():
     song = ensure_platform_links(song)
     result = analyze_mood(song=song, mood=mood, context=context)
     preferences_data, _ = fetch_preferences(session["visitor_id"])
+    feedback, _ = fetch_song_feedback(session["visitor_id"])
     recommendations = [
         ensure_platform_links(track)
         for track in get_recommendations(
@@ -333,6 +383,7 @@ def analyze():
             context=context,
             song=song,
             preferences=preferences_data,
+            feedback=feedback,
         )
     ]
     saved_id, save_error = save_analysis(
@@ -356,6 +407,7 @@ def analyze():
         diary_text=diary_text,
         saved_id=saved_id,
         save_error=save_error,
+        feedback=feedback,
     )
 
 
@@ -373,6 +425,78 @@ def history():
         weekly_report=weekly_report,
         error=error or trend_error,
     )
+
+
+@app.route("/journal", methods=["GET", "POST"])
+def journal():
+    if request.method == "POST":
+        body = request.form.get("body", "").strip()[:3000]
+        title = request.form.get("title", "").strip()[:120]
+        mood = request.form.get("mood", "").strip()[:20]
+        if not body:
+            flash("請先寫下一點今天的心情。")
+        else:
+            entry_id, error = save_journal_entry(session["visitor_id"], title, body, mood)
+            flash("心情日記已保存。" if entry_id else f"日記暫時無法保存：{error}")
+            if entry_id:
+                return redirect(url_for("journal"))
+    entries, error = fetch_journal_entries(session["visitor_id"])
+    return render_template("journal.html", entries=entries, error=error, moods=MOODS)
+
+
+def require_login():
+    if not session.get("user_id"):
+        flash("請先登入才能使用好友與聊天功能。")
+        return redirect(url_for("login", next=request.path))
+    return None
+
+
+@app.route("/friends", methods=["GET", "POST"])
+def friends():
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+    if request.method == "POST":
+        target_id = request.form.get("user_id", type=int)
+        ok, error = send_friend_request(session["user_id"], target_id)
+        flash("好友申請已送出。" if ok else error)
+        return redirect(url_for("friends"))
+    query = request.args.get("q", "").strip()
+    results, search_error = search_users(query, session["user_id"]) if query else ([], None)
+    (friend_list, pending), error = fetch_friend_data(session["user_id"])
+    return render_template("friends.html", friends=friend_list, pending=pending, results=results, query=query, error=error or search_error)
+
+
+@app.post("/friends/<int:friendship_id>/<action>")
+def friend_request_action(friendship_id, action):
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+    status = "accepted" if action == "accept" else "declined"
+    ok, error = respond_friend_request(friendship_id, session["user_id"], status)
+    flash("好友申請已接受。" if ok and status == "accepted" else ("好友申請已略過。" if ok else error))
+    return redirect(url_for("friends"))
+
+
+@app.route("/chat/<int:friend_id>", methods=["GET", "POST"])
+def chat(friend_id):
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+    if request.method == "POST":
+        body = request.form.get("body", "").strip()[:1000]
+        if body:
+            _, error = send_message(session["user_id"], friend_id, body)
+            if error:
+                flash(error)
+        return redirect(url_for("chat", friend_id=friend_id))
+    (friend_list, _), error = fetch_friend_data(session["user_id"])
+    friend = next((item for item in friend_list if item["id"] == friend_id), None)
+    if not friend:
+        flash("找不到這位好友，或你們尚未成為好友。")
+        return redirect(url_for("friends"))
+    messages, message_error = fetch_messages(session["user_id"], friend_id)
+    return render_template("chat.html", friend=friend, messages=messages, error=error or message_error)
 
 
 @app.get("/leaderboard")
@@ -418,6 +542,68 @@ def favorites():
     return render_template("favorites.html", songs=songs, error=error)
 
 
+@app.get("/favorites/export.csv")
+def export_favorites_csv():
+    songs, error = fetch_favorite_songs(visitor_id=session["visitor_id"], limit=500)
+    if error:
+        flash(f"播放清單匯出失敗：{error}")
+        return redirect(url_for("favorites"))
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["歌曲", "歌手", "專輯", "曲風", "Apple Music", "Spotify", "YouTube Music"])
+    for song in songs:
+        writer.writerow([song["track_name"], song["artist_name"], song["album_name"] or "", song["genre"] or "", song["apple_music_url"] or "", song["spotify_url"] or "", song["youtube_music_url"] or ""])
+    response = app.response_class("\ufeff" + output.getvalue(), mimetype="text/csv; charset=utf-8")
+    response.headers["Content-Disposition"] = "attachment; filename=moodtune-playlist.csv"
+    return response
+
+
+@app.get("/favorites/export.m3u")
+def export_favorites_m3u():
+    songs, error = fetch_favorite_songs(visitor_id=session["visitor_id"], limit=500)
+    if error:
+        flash(f"播放清單匯出失敗：{error}")
+        return redirect(url_for("favorites"))
+    lines = ["#EXTM3U"]
+    for song in songs:
+        # iTunes preview is the only direct audio URL we receive; platform links
+        # remain available in the CSV for full-length playback by the user.
+        audio_url = song.get("preview_url") or song.get("youtube_music_url") or song.get("spotify_url")
+        if audio_url:
+            lines.extend([f"#EXTINF:-1,{song['artist_name']} - {song['track_name']}", audio_url])
+    response = app.response_class("\n".join(lines) + "\n", mimetype="audio/x-mpegurl")
+    response.headers["Content-Disposition"] = "attachment; filename=moodtune-playlist.m3u"
+    return response
+
+
+@app.post("/feedback")
+def feedback():
+    try:
+        song = json.loads(request.form.get("song_json", "{}"))
+    except (json.JSONDecodeError, TypeError):
+        flash("歌曲回饋資料格式不正確。")
+        return redirect(request.form.get("next") or url_for("index"))
+    feedback_type = request.form.get("feedback_type", "")
+    ok, error = save_song_feedback(session["visitor_id"], song, feedback_type)
+    labels = {"dislike": "已記住你的偏好，之後會減少推薦類似歌曲。", "tag_mismatch": "已記錄標籤不符，會降低相似曲風的推薦。"}
+    flash(labels.get(feedback_type, "回饋已保存。") if ok else f"回饋保存失敗：{error}")
+    return redirect(request.form.get("next") or url_for("index"))
+
+
+@app.post("/favorites/<int:favorite_id>/delete")
+def delete_favorite(favorite_id):
+    ok, error = delete_favorite_song(
+        favorite_id, visitor_id=session["visitor_id"]
+    )
+    if ok:
+        flash("已取消收藏。")
+    elif error:
+        flash(f"取消收藏失敗：{error}")
+    else:
+        flash("找不到這筆收藏，或它不屬於目前使用者。")
+    return redirect(request.form.get("next") or url_for("favorites"))
+
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if session.get("user_id"):
@@ -448,11 +634,66 @@ def register():
                 session["user_id"] = user_id
                 session["display_name"] = display_name
                 session["visitor_id"] = account_visitor_id
-                flash("註冊完成，已登入 MoodTune。")
+                raw_token, token_hash = make_account_token()
+                create_account_token(user_id, token_hash, "email_verification", int(time()) + 86400)
+                verify_url = url_for("verify_email", token=raw_token, _external=True)
+                try:
+                    send_account_email(email, "MoodTune Email 驗證", f"請開啟以下連結驗證 Email：\n\n{verify_url}\n\n連結 24 小時內有效。")
+                    flash("註冊完成，驗證連結已寄出（開發環境會記錄在伺服器 log）。")
+                except Exception:
+                    flash("註冊完成，但驗證信寄送失敗，請稍後重新申請。")
                 return redirect(url_for("index"))
             else:
                 flash(f"註冊失敗：{error}")
     return render_template("auth.html", mode="register")
+
+
+@app.get("/verify-email/<token>")
+def verify_email(token):
+    user_id, error = consume_account_token(hashlib.sha256(token.encode("utf-8")).hexdigest(), "email_verification", int(time()))
+    if error:
+        flash(f"Email 驗證暫時失敗：{error}")
+    elif not user_id:
+        flash("驗證連結無效或已過期，請重新申請。")
+    else:
+        ok, error = mark_email_verified(user_id, int(time()))
+        flash("Email 驗證完成。" if ok else f"Email 驗證失敗：{error}")
+    return redirect(url_for("login"))
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        user, _ = fetch_user_by_email(email)
+        if user:
+            raw_token, token_hash = make_account_token()
+            create_account_token(user["id"], token_hash, "password_reset", int(time()) + 3600)
+            reset_url = url_for("reset_password", token=raw_token, _external=True)
+            try:
+                send_account_email(email, "MoodTune 重設密碼", f"請開啟以下連結重設密碼：\n\n{reset_url}\n\n連結 1 小時內有效。")
+            except Exception:
+                pass
+        flash("如果這個 Email 有註冊，重設密碼連結已寄出。")
+        return redirect(url_for("login"))
+    return render_template("auth.html", mode="forgot")
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        if len(password) < 8:
+            flash("密碼至少需要 8 個字元。")
+            return render_template("auth.html", mode="reset", token=token)
+        user_id, error = consume_account_token(hashlib.sha256(token.encode("utf-8")).hexdigest(), "password_reset", int(time()))
+        if error or not user_id:
+            flash("重設連結無效或已過期，請重新申請。")
+        else:
+            ok, error = update_user_password(user_id, generate_password_hash(password))
+            flash("密碼已重設，請重新登入。" if ok else f"密碼重設失敗：{error}")
+        return redirect(url_for("login"))
+    return render_template("auth.html", mode="reset", token=token)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -467,6 +708,8 @@ def login():
             flash(f"登入暫時失敗：{error}")
         elif not user or not user.get("password_hash") or not check_password_hash(user["password_hash"], password):
             flash("Email 或密碼不正確。")
+        elif os.getenv("REQUIRE_EMAIL_VERIFICATION", "0") == "1" and not user.get("email_verified_at"):
+            flash("請先完成 Email 驗證，再登入 MoodTune。")
         else:
             session.clear()
             session["user_id"] = user["id"]

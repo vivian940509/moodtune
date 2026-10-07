@@ -26,6 +26,10 @@
         <input type="hidden" name="next" value="{{ request.full_path }}">
         <button class="secondary-action" type="submit">收藏這首歌</button>
       </form>
+      <div class="feedback-actions">
+        <form method="post" action="{{ url_for('feedback') }}"><input type="hidden" name="song_json" value='{{ song|tojson }}'><input type="hidden" name="feedback_type" value="tag_mismatch"><input type="hidden" name="next" value="{{ request.full_path }}"><button class="text-button" type="submit">標籤不符</button></form>
+        <form method="post" action="{{ url_for('feedback') }}"><input type="hidden" name="song_json" value='{{ song|tojson }}'><input type="hidden" name="feedback_type" value="dislike"><input type="hidden" name="next" value="{{ request.full_path }}"><button class="text-button" type="submit">不喜歡，少推薦類似歌曲</button></form>
+      </div>
     </div>
   </article>
 
@@ -120,6 +124,7 @@
             <input type="hidden" name="next" value="{{ request.full_path }}">
             <button class="inline-action" type="submit">收藏</button>
           </form>
+          <div class="feedback-actions"><form method="post" action="{{ url_for('feedback') }}"><input type="hidden" name="song_json" value='{{ track|tojson }}'><input type="hidden" name="feedback_type" value="dislike"><input type="hidden" name="next" value="{{ request.full_path }}"><button class="text-button" type="submit">不喜歡，少推薦類似歌曲</button></form></div>
         </div>
       </div>
       {% endfor %}

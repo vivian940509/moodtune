@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}MoodTune｜與 {{ friend.display_name }} 聊天{% endblock %}
+{% block content %}
+<section class="page-head"><p class="eyebrow">Private Chat</p><h1>與 {{ friend.display_name }} 聊天</h1><p class="lede">這是你們的私人對話。</p></section>
+<section class="panel chat-panel"><div class="chat-messages">{% for message in messages %}<div class="chat-bubble {% if message.sender_id == current_user.id %}mine{% endif %}"><span>{{ message.sender_name }}</span><p>{{ message.body }}</p></div>{% else %}<p class="muted">開始你們的第一句話吧。</p>{% endfor %}</div><form class="chat-compose" method="post"><textarea name="body" maxlength="1000" required placeholder="寫點什麼……"></textarea><button class="primary" type="submit">送出</button></form></section>
+{% endblock %}

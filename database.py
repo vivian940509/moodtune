@@ -97,6 +97,7 @@ def _initialize_sqlite(engine):
         for column_name, statement in {
             "email": "ALTER TABLE users ADD COLUMN email TEXT",
             "password_hash": "ALTER TABLE users ADD COLUMN password_hash TEXT",
+            "email_verified_at": "ALTER TABLE users ADD COLUMN email_verified_at TEXT",
         }.items():
             if column_name not in user_columns:
                 connection.execute(text(statement))
@@ -488,6 +489,277 @@ def fetch_favorite_songs(limit=50, visitor_id=None):
             return [dict(row._mapping) for row in rows], None
     except SQLAlchemyError as exc:
         return [], str(exc)
+
+
+def save_song_feedback(visitor_id, song, feedback_type):
+    if feedback_type not in {"dislike", "tag_mismatch"}:
+        return False, "無效的歌曲回饋。"
+    try:
+        with db_connection() as connection:
+            params = {
+                "visitor_id": visitor_id,
+                "track_id": song.get("track_id"),
+                "track_name": song.get("track_name"),
+                "artist_name": song.get("artist_name"),
+                "genre": song.get("genre"),
+                "feedback_type": feedback_type,
+            }
+            if connection.dialect.name == "postgresql":
+                statement = """
+                    INSERT INTO song_feedback
+                    (visitor_id, itunes_track_id, track_name, artist_name, genre, feedback_type)
+                    VALUES (:visitor_id, :track_id, :track_name, :artist_name, :genre, :feedback_type)
+                    ON CONFLICT (visitor_id, track_name, artist_name, feedback_type) DO NOTHING
+                """
+            elif connection.dialect.name == "mysql":
+                statement = """
+                    INSERT IGNORE INTO song_feedback
+                    (visitor_id, itunes_track_id, track_name, artist_name, genre, feedback_type)
+                    VALUES (:visitor_id, :track_id, :track_name, :artist_name, :genre, :feedback_type)
+                """
+            else:
+                statement = """
+                    INSERT OR IGNORE INTO song_feedback
+                    (visitor_id, itunes_track_id, track_name, artist_name, genre, feedback_type)
+                    VALUES (:visitor_id, :track_id, :track_name, :artist_name, :genre, :feedback_type)
+                """
+            connection.execute(text(statement), params)
+            return True, None
+    except SQLAlchemyError as exc:
+        return False, str(exc)
+
+
+def fetch_song_feedback(visitor_id):
+    try:
+        with db_connection() as connection:
+            rows = connection.execute(text("""
+                SELECT itunes_track_id, track_name, artist_name, genre, feedback_type
+                FROM song_feedback WHERE visitor_id = :visitor_id
+            """), {"visitor_id": visitor_id})
+            return [dict(row._mapping) for row in rows], None
+    except SQLAlchemyError as exc:
+        return [], str(exc)
+
+
+def delete_favorite_song(favorite_id, visitor_id=None):
+    """Delete one favorite only when it belongs to the current visitor/account."""
+    try:
+        with db_connection() as connection:
+            result = connection.execute(
+                text(
+                    """
+                    DELETE FROM favorite_songs
+                    WHERE id = :favorite_id AND visitor_id = :visitor_id
+                    """
+                ),
+                {"favorite_id": favorite_id, "visitor_id": visitor_id},
+            )
+            return result.rowcount > 0, None
+    except SQLAlchemyError as exc:
+        return False, str(exc)
+
+
+def save_journal_entry(visitor_id, title, body, mood=""):
+    try:
+        with db_connection() as connection:
+            entry_id = _insert_and_get_id(
+                connection,
+                """
+                INSERT INTO journal_entries (visitor_id, title, body, mood)
+                VALUES (:visitor_id, :title, :body, :mood)
+                """,
+                {"visitor_id": visitor_id, "title": title or None, "body": body, "mood": mood or None},
+            )
+            return entry_id, None
+    except SQLAlchemyError as exc:
+        return None, str(exc)
+
+
+def fetch_journal_entries(visitor_id, limit=50):
+    try:
+        with db_connection() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT id, title, body, mood, created_at
+                    FROM journal_entries
+                    WHERE visitor_id = :visitor_id
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"visitor_id": visitor_id, "limit": limit},
+            )
+            return [dict(row._mapping) for row in rows], None
+    except SQLAlchemyError as exc:
+        return [], str(exc)
+
+
+def search_users(query, current_user_id):
+    try:
+        with db_connection() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT id, email, display_name
+                    FROM users
+                    WHERE id <> :current_user_id
+                      AND (LOWER(email) LIKE :query OR LOWER(display_name) LIKE :query)
+                    ORDER BY display_name, email
+                    LIMIT 20
+                    """
+                ),
+                {"current_user_id": current_user_id, "query": f"%{query.lower().strip()}%"},
+            )
+            return [dict(row._mapping) for row in rows], None
+    except SQLAlchemyError as exc:
+        return [], str(exc)
+
+
+def send_friend_request(requester_id, addressee_id):
+    if requester_id == addressee_id:
+        return False, "不能加自己為好友。"
+    try:
+        with db_connection() as connection:
+            existing = connection.execute(
+                text(
+                    """
+                    SELECT id, status FROM friendships
+                    WHERE (requester_id = :requester_id AND addressee_id = :addressee_id)
+                       OR (requester_id = :addressee_id AND addressee_id = :requester_id)
+                    LIMIT 1
+                    """
+                ),
+                {"requester_id": requester_id, "addressee_id": addressee_id},
+            ).first()
+            if existing:
+                return False, "好友申請已存在或你們已經是好友。"
+            _insert_and_get_id(
+                connection,
+                "INSERT INTO friendships (requester_id, addressee_id, status) VALUES (:requester_id, :addressee_id, 'pending')",
+                {"requester_id": requester_id, "addressee_id": addressee_id},
+            )
+            return True, None
+    except SQLAlchemyError as exc:
+        return False, str(exc)
+
+
+def fetch_friend_data(user_id):
+    try:
+        with db_connection() as connection:
+            friends = connection.execute(text("""
+                SELECT u.id, u.display_name, u.email
+                FROM friendships f JOIN users u ON u.id = CASE
+                    WHEN f.requester_id = :user_id THEN f.addressee_id ELSE f.requester_id END
+                WHERE (f.requester_id = :user_id OR f.addressee_id = :user_id) AND f.status = 'accepted'
+                ORDER BY u.display_name
+            """), {"user_id": user_id})
+            pending = connection.execute(text("""
+                SELECT f.id, u.id AS user_id, u.display_name, u.email
+                FROM friendships f JOIN users u ON u.id = f.requester_id
+                WHERE f.addressee_id = :user_id AND f.status = 'pending'
+                ORDER BY f.created_at DESC
+            """), {"user_id": user_id})
+            return ([dict(row._mapping) for row in friends], [dict(row._mapping) for row in pending]), None
+    except SQLAlchemyError as exc:
+        return ([], []), str(exc)
+
+
+def respond_friend_request(friendship_id, user_id, status):
+    if status not in {"accepted", "declined"}:
+        return False, "無效的好友申請狀態。"
+    try:
+        with db_connection() as connection:
+            result = connection.execute(text("""
+                UPDATE friendships SET status = :status
+                WHERE id = :id AND addressee_id = :user_id AND status = 'pending'
+            """), {"id": friendship_id, "user_id": user_id, "status": status})
+            return result.rowcount > 0, None
+    except SQLAlchemyError as exc:
+        return False, str(exc)
+
+
+def send_message(sender_id, recipient_id, body):
+    try:
+        with db_connection() as connection:
+            allowed = connection.execute(text("""
+                SELECT id FROM friendships
+                WHERE ((requester_id = :sender_id AND addressee_id = :recipient_id)
+                    OR (requester_id = :recipient_id AND addressee_id = :sender_id))
+                  AND status = 'accepted'
+            """), {"sender_id": sender_id, "recipient_id": recipient_id}).first()
+            if not allowed:
+                return None, "請先成為好友才能聊天。"
+            message_id = _insert_and_get_id(connection, """
+                INSERT INTO messages (sender_id, recipient_id, body)
+                VALUES (:sender_id, :recipient_id, :body)
+            """, {"sender_id": sender_id, "recipient_id": recipient_id, "body": body})
+            return message_id, None
+    except SQLAlchemyError as exc:
+        return None, str(exc)
+
+
+def fetch_messages(user_id, friend_id, limit=100):
+    try:
+        with db_connection() as connection:
+            rows = connection.execute(text("""
+                SELECT m.id, m.sender_id, m.recipient_id, m.body, m.created_at,
+                       u.display_name AS sender_name
+                FROM messages m JOIN users u ON u.id = m.sender_id
+                WHERE ((m.sender_id = :user_id AND m.recipient_id = :friend_id)
+                    OR (m.sender_id = :friend_id AND m.recipient_id = :user_id))
+                ORDER BY m.created_at ASC, m.id ASC LIMIT :limit
+            """), {"user_id": user_id, "friend_id": friend_id, "limit": limit})
+            return [dict(row._mapping) for row in rows], None
+    except SQLAlchemyError as exc:
+        return [], str(exc)
+
+
+def create_account_token(user_id, token_hash, token_type, expires_at):
+    try:
+        with db_connection() as connection:
+            _insert_and_get_id(connection, """
+                INSERT INTO account_tokens (user_id, token_hash, token_type, expires_at)
+                VALUES (:user_id, :token_hash, :token_type, :expires_at)
+            """, {"user_id": user_id, "token_hash": token_hash, "token_type": token_type, "expires_at": expires_at})
+            return True, None
+    except SQLAlchemyError as exc:
+        return False, str(exc)
+
+
+def consume_account_token(token_hash, token_type, now):
+    try:
+        with db_connection() as connection:
+            row = connection.execute(text("""
+                SELECT id, user_id FROM account_tokens
+                WHERE token_hash = :token_hash AND token_type = :token_type
+                  AND used_at IS NULL AND expires_at > :now
+                LIMIT 1
+            """), {"token_hash": token_hash, "token_type": token_type, "now": now}).first()
+            if not row:
+                return None, None
+            connection.execute(text("UPDATE account_tokens SET used_at=:now WHERE id=:id"), {"now": now, "id": row.id})
+            return row.user_id, None
+    except SQLAlchemyError as exc:
+        return None, str(exc)
+
+
+def mark_email_verified(user_id, verified_at):
+    try:
+        with db_connection() as connection:
+            result = connection.execute(text("UPDATE users SET email_verified_at=:verified_at WHERE id=:user_id"), {"verified_at": verified_at, "user_id": user_id})
+            return result.rowcount > 0, None
+    except SQLAlchemyError as exc:
+        return False, str(exc)
+
+
+def update_user_password(user_id, password_hash):
+    try:
+        with db_connection() as connection:
+            result = connection.execute(text("UPDATE users SET password_hash=:password_hash WHERE id=:user_id"), {"password_hash": password_hash, "user_id": user_id})
+            return result.rowcount > 0, None
+    except SQLAlchemyError as exc:
+        return False, str(exc)
 
 # --- Account helpers (v2) ---
 def create_user(email, display_name, password_hash):

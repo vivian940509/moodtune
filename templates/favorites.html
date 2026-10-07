@@ -21,6 +21,8 @@
       <h2>收藏歌曲</h2>
     </div>
     <span>{{ songs|length }} 首</span>
+    <a class="secondary-action" href="{{ url_for('export_favorites_csv') }}">匯出播放清單</a>
+    <a class="secondary-action" href="{{ url_for('export_favorites_m3u') }}">匯出 M3U</a>
   </div>
 
   {% for song in songs %}
@@ -34,12 +36,17 @@
         {% if song.preview_url %}
         <a href="{{ song.preview_url }}" target="_blank" rel="noopener">30 秒試聽</a>
         {% endif %}
+        <a href="{{ song.youtube_music_url }}" target="_blank" rel="noopener">完整播放</a>
         <a href="{{ song.youtube_music_url }}" target="_blank" rel="noopener">YouTube Music</a>
         {% if song.apple_music_url %}
         <a href="{{ song.apple_music_url }}" target="_blank" rel="noopener">Apple Music</a>
         {% endif %}
         <a href="{{ song.spotify_url }}" target="_blank" rel="noopener">Spotify</a>
       </div>
+      <form class="favorite-delete-form" method="post" action="{{ url_for('delete_favorite', favorite_id=song.id) }}">
+        <input type="hidden" name="next" value="{{ request.full_path }}">
+        <button class="secondary-action danger-action" type="submit">取消收藏</button>
+      </form>
     </div>
     <div class="leaderboard-metric">
       <span>收藏時間</span>

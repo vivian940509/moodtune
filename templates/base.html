@@ -15,6 +15,8 @@
         <a href="{{ url_for('history') }}">歷史紀錄</a>
         <a href="{{ url_for('leaderboard') }}">排行榜</a>
         <a href="{{ url_for('favorites') }}">收藏</a>
+        <a href="{{ url_for('journal') }}">心情日記</a>
+        <a href="{{ url_for('friends') }}">好友／聊天</a>
         <a href="{{ url_for('preferences') }}">音樂偏好</a>
         {% if current_user %}
         <span class="nav-user">{{ current_user.display_name }}</span>

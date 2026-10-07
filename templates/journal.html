@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}MoodTune｜心情日記{% endblock %}
+{% block content %}
+<section class="page-head"><p class="eyebrow">Private Journal</p><h1>心情日記</h1><p class="lede">把今天的感受寫下來，給未來的自己一個溫柔的回聲。</p></section>
+<section class="journal-layout">
+  <form class="panel" method="post">
+    <label class="field-label" for="journalTitle">標題（選填）</label>
+    <input id="journalTitle" name="title" maxlength="120" placeholder="今天想記住什麼？">
+    <label class="field-label" for="journalMood">今天的心情</label>
+    <select id="journalMood" name="mood"><option value="">不指定</option>{% for mood in moods %}<option value="{{ mood }}">{{ mood }}</option>{% endfor %}</select>
+    <label class="field-label" for="journalBody">心情日記</label>
+    <textarea id="journalBody" name="body" maxlength="3000" required placeholder="今天發生了什麼？你希望音樂怎麼陪伴你？"></textarea>
+    <button class="primary" type="submit">保存這篇日記</button>
+  </form>
+  <section class="journal-list">
+    {% for entry in entries %}<article class="panel journal-entry"><div class="section-title"><h2>{{ entry.title or '今天的心情' }}</h2><span>{{ entry.created_at|string|truncate(16, true, '') }}</span></div>{% if entry.mood %}<span class="mood-chip">{{ entry.mood }}</span>{% endif %}<p>{{ entry.body }}</p></article>{% else %}<section class="panel empty"><h2>還沒有日記</h2><p>寫下第一篇，讓 MoodTune 陪你留住今天。</p></section>{% endfor %}
+  </section>
+</section>
+{% endblock %}
