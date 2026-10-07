@@ -312,6 +312,31 @@ def test_song_feedback_api_records_tag_mismatch(monkeypatch, tmp_path):
     assert rows[0]["feedback_type"] == "tag_mismatch"
 
 
+def test_search_excludes_song_marked_as_tag_mismatch(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-search-feedback.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    client = app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["visitor_id"] = "search-feedback-visitor"
+    save_song_feedback(
+        "search-feedback-visitor",
+        {"track_id": "blocked-1", "track_name": "不想再看到", "artist_name": "MoodTune", "genre": "抒情"},
+        "tag_mismatch",
+    )
+    monkeypatch.setattr(
+        "app.search_tracks",
+        lambda *args, **kwargs: [
+            {"track_id": "blocked-1", "track_name": "不想再看到", "artist_name": "MoodTune", "genre": "抒情"},
+            {"track_id": "allowed-1", "track_name": "保留歌曲", "artist_name": "Other", "genre": "流行"},
+        ],
+    )
+
+    response = client.get("/api/search?q=test")
+
+    assert response.status_code == 200
+    assert [track["track_id"] for track in response.get_json()["tracks"]] == ["allowed-1"]
+
+
 def test_history_page_shows_chart_and_weekly_report(monkeypatch, tmp_path):
     database_path = tmp_path / "moodtune-history.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")

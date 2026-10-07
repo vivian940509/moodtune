@@ -104,6 +104,35 @@ def send_account_email(recipient, subject, body):
     return True
 
 
+def filter_tracks_by_feedback(tracks, feedback):
+    feedback = feedback or []
+    blocked_ids = {str(row.get("itunes_track_id") or "") for row in feedback if row.get("itunes_track_id")}
+    blocked_signatures = {
+        f"{(row.get('track_name') or '').casefold()}|{(row.get('artist_name') or '').casefold()}"
+        for row in feedback
+    }
+    blocked_artists = {
+        (row.get("artist_name") or "").casefold()
+        for row in feedback
+        if row.get("feedback_type") == "dislike" and row.get("artist_name")
+    }
+    blocked_genres = {
+        (row.get("genre") or "").casefold()
+        for row in feedback
+        if row.get("feedback_type") in {"dislike", "tag_mismatch"} and row.get("genre")
+    }
+    filtered = []
+    for track in tracks:
+        track_id = str(track.get("track_id") or "")
+        signature = f"{(track.get('track_name') or '').casefold()}|{(track.get('artist_name') or '').casefold()}"
+        artist = (track.get("artist_name") or "").casefold()
+        genre = (track.get("genre") or "").casefold()
+        if track_id in blocked_ids or signature in blocked_signatures or artist in blocked_artists or genre in blocked_genres:
+            continue
+        filtered.append(track)
+    return filtered
+
+
 def build_history_chart(rows):
     recent_rows = list(reversed(rows[:30]))
     return {
@@ -172,8 +201,6 @@ def get_recommendations(mood, context, song, preferences=None, feedback=None):
     language = prefs.get("music_language")
     genre = prefs.get("favorite_genre")
     feedback = feedback or []
-    disliked_artists = {row["artist_name"].casefold() for row in feedback if row["feedback_type"] == "dislike"}
-    disliked_genres = {row.get("genre", "").casefold() for row in feedback if row["feedback_type"] in {"dislike", "tag_mismatch"} and row.get("genre")}
 
     artist = (song.get("artist_name") or "").strip()
     terms = []
@@ -201,9 +228,7 @@ def get_recommendations(mood, context, song, preferences=None, feedback=None):
         for track in tracks:
             track_id = str(track.get("track_id") or "")
             signature = f"{track.get('track_name','')}|{track.get('artist_name','')}".casefold()
-            artist_name = (track.get("artist_name") or "").casefold()
-            track_genre = (track.get("genre") or "").casefold()
-            if track_id in seen or signature in seen or artist_name in disliked_artists or track_genre in disliked_genres:
+            if track_id in seen or signature in seen or not filter_tracks_by_feedback([track], feedback):
                 continue
             recommendations.append(track)
             seen.add(track_id)
@@ -337,6 +362,8 @@ def api_search():
             music_language=(preferences_data or {}).get("music_language"),
             favorite_genre=(preferences_data or {}).get("favorite_genre"),
         )
+        feedback, _ = fetch_song_feedback(session["visitor_id"])
+        tracks = filter_tracks_by_feedback(tracks, feedback)
         return jsonify({"tracks": tracks, "music_language": (preferences_data or {}).get("music_language")})
     except Exception as exc:
         return jsonify({"error": f"搜尋暫時失敗：{exc}"}), 502
