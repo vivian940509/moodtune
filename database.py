@@ -106,6 +106,7 @@ def _initialize_sqlite(engine):
         if "visitor_id" not in favorite_columns:
             connection.execute(text("ALTER TABLE favorite_songs ADD COLUMN visitor_id TEXT"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_favorite_owner_song ON favorite_songs (visitor_id, track_name, artist_name)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS idx_messages_recipient_sender ON messages (recipient_id, sender_id, created_at)"))
         connection.execute(
             text(
                 "CREATE INDEX IF NOT EXISTS idx_mood_entries_visitor_created "

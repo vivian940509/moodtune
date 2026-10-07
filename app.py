@@ -496,6 +496,21 @@ def chat(friend_id):
     return render_template("chat.html", friend=friend, messages=messages, error=error or message_error)
 
 
+@app.post("/api/chat/<int:friend_id>")
+def api_chat(friend_id):
+    redirect_response = require_login()
+    if redirect_response:
+        return jsonify({"error": "請先登入。"}), 401
+    payload = request.get_json(silent=True) or {}
+    body = str(payload.get("body", "")).strip()[:1000]
+    if not body:
+        return jsonify({"error": "訊息不能是空白。"}), 400
+    message_id, error = send_message(session["user_id"], friend_id, body)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"ok": True, "id": message_id, "body": body, "sender_name": session.get("display_name", "我")})
+
+
 @app.get("/leaderboard")
 def leaderboard():
     songs, error = fetch_song_leaderboard()
