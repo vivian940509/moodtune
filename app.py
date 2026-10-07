@@ -354,7 +354,6 @@ def analyze():
     mood = request.form.get("mood", "平靜")
     context = request.form.get("context", "放空")
     mood_text = request.form.get("mood_text", "").strip()[:500]
-    diary_text = request.form.get("diary_text", "").strip()[:1000]
     raw_song = request.form.get("song_json", "")
 
     if mood not in MOODS:
@@ -393,7 +392,6 @@ def analyze():
         result=result,
         visitor_id=session["visitor_id"],
         mood_text=mood_text,
-        diary_text=diary_text,
     )
 
     return render_template(
@@ -404,7 +402,6 @@ def analyze():
         result=result,
         recommendations=recommendations,
         mood_text=mood_text,
-        diary_text=diary_text,
         saved_id=saved_id,
         save_error=save_error,
         feedback=feedback,

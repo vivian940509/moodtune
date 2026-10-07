@@ -53,14 +53,9 @@
     <p>{{ result.analysis }}</p>
     <h2>今日建議</h2>
     <p>{{ result.suggestion }}</p>
-    {% if mood_text or diary_text %}
+    {% if mood_text %}
     <div class="journal-summary">
-      {% if mood_text %}
       <p><strong>你描述的心情</strong><br>{{ mood_text }}</p>
-      {% endif %}
-      {% if diary_text %}
-      <p><strong>今天的日記</strong><br>{{ diary_text }}</p>
-      {% endif %}
     </div>
     {% endif %}
     {% if save_error %}

@@ -261,7 +261,7 @@ def test_visitors_can_skip_preferences(monkeypatch, tmp_path):
 
     assert response.status_code == 200
     assert b'moodText' in response.data
-    assert b'diaryText' in response.data
+    assert b'moodText' in response.data
 
 
 def test_analyze_route_shows_external_platform_links(monkeypatch, tmp_path):
@@ -324,6 +324,7 @@ def test_history_page_shows_chart_and_weekly_report(monkeypatch, tmp_path):
     assert "moodTrendChart".encode() in response.data
     assert "AI Weekly Report".encode() in response.data
     assert "今天完成了重要工作".encode() in response.data
+    assert "這首歌讓我想把好心情記下來".encode() not in response.data
 
 
 def test_preferences_can_be_saved_and_loaded(monkeypatch, tmp_path):

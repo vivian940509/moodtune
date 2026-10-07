@@ -6,7 +6,7 @@
   <div>
     <p class="eyebrow">今日串流情緒</p>
     <h1>先說說心情，再找一首陪你的歌。</h1>
-    <p class="lede">寫下現在的感受、選擇情境，再從搜尋結果挑一首歌，產生今日聽歌心情分析與日記。</p>
+    <p class="lede">寫下現在的感受、選擇情境，再從搜尋結果挑一首歌，產生今日聽歌心情分析。</p>
   </div>
   <div class="hero-note">
     <strong>你的音樂偏好</strong>
@@ -59,8 +59,6 @@
       </div>
     </fieldset>
 
-    <label class="field-label" for="diaryText">心情日記（選填）</label>
-    <textarea id="diaryText" name="diary_text" maxlength="1000" placeholder="今天發生了什麼？你希望音樂怎麼陪伴你？"></textarea>
   </section>
 
   <section class="panel">
@@ -73,7 +71,7 @@
     <p class="hint" id="searchHint">搜尋並選一首最符合今天狀態的歌。</p>
     <div class="track-grid" id="trackResults"></div>
     <div class="selected-song" id="selectedSong">尚未選擇歌曲</div>
-    <button class="primary" id="analyzeButton" type="submit" disabled>分析並存入心情日記</button>
+    <button class="primary" id="analyzeButton" type="submit" disabled>分析並存入歷史紀錄</button>
   </section>
 </form>
 {% endblock %}
