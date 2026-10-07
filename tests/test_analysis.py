@@ -307,6 +307,7 @@ def test_song_feedback_api_records_tag_mismatch(monkeypatch, tmp_path):
     rows, error = fetch_song_feedback("feedback-api-visitor")
 
     assert response.status_code == 200
+    assert response.get_json()["track_id"] == "api-1"
     assert error is None
     assert rows[0]["feedback_type"] == "tag_mismatch"
 

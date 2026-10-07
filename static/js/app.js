@@ -71,8 +71,8 @@ function renderTracks(tracks) {
           body: JSON.stringify({ song: track, feedback_type: "tag_mismatch" }),
         });
         if (!response.ok) throw new Error("回饋保存失敗");
-        feedbackButton.textContent = "已減少類似推薦";
-        feedbackButton.classList.add("is-saved");
+        result.remove();
+        searchHint.textContent = "已記錄回饋，之後會減少推薦這類歌曲。";
       } catch (error) {
         feedbackButton.disabled = false;
         feedbackButton.textContent = error.message;

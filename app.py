@@ -610,7 +610,7 @@ def api_feedback():
     ok, error = save_song_feedback(session["visitor_id"], song, feedback_type)
     if not ok:
         return jsonify({"error": error or "回饋保存失敗。"}), 400
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "track_id": song.get("track_id"), "feedback_type": feedback_type})
 
 
 @app.post("/favorites/<int:favorite_id>/delete")
