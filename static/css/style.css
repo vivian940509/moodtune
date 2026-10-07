@@ -183,8 +183,9 @@ h2 {
 
 .inline-form { display: inline; }
 .text-button { border: 0; background: transparent; color: var(--muted); cursor: pointer; }
-.feedback-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
-.feedback-actions .text-button { padding: 0; font-size: .86rem; }
+.feedback-actions { position: relative; z-index: 3; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.feedback-actions form { position: relative; z-index: 3; }
+.feedback-actions .text-button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--teal-dark); font-size: .86rem; pointer-events: auto; }
 .friend-card { border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
 .friend-card em { color: var(--teal-dark); font-style: normal; font-weight: 800; }
 .chat-panel { max-width: 760px; margin: 0 auto; }
@@ -290,6 +291,7 @@ button:disabled {
 .track-result {
   display: grid;
   gap: 5px;
+  position: relative;
 }
 
 .track-card {
@@ -329,7 +331,14 @@ button:disabled {
 }
 
 .track-feedback {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
   border: 0;
+  border-radius: 8px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
