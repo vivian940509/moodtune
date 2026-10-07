@@ -338,6 +338,60 @@ def test_search_excludes_song_marked_as_tag_mismatch(monkeypatch, tmp_path):
     assert [track["track_id"] for track in response.get_json()["tracks"]] == ["allowed-1", "allowed-2"]
 
 
+def test_search_fills_six_results_after_feedback_filter(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-search-fill.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    client = app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["visitor_id"] = "search-fill-visitor"
+    save_song_feedback(
+        "search-fill-visitor",
+        {"track_id": "blocked-1", "track_name": "已隱藏", "artist_name": "MoodTune", "genre": "抒情"},
+        "tag_mismatch",
+    )
+    captured = {}
+
+    def fake_search(*args, **kwargs):
+        captured["limit"] = kwargs["limit"]
+        return [
+            {"track_id": "blocked-1", "track_name": "已隱藏", "artist_name": "MoodTune", "genre": "抒情"},
+            *[
+                {"track_id": f"allowed-{index}", "track_name": f"歌曲 {index}", "artist_name": "Other", "genre": "抒情"}
+                for index in range(1, 7)
+            ],
+        ]
+
+    monkeypatch.setattr("app.search_tracks", fake_search)
+
+    response = client.get("/api/search?q=抒情")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert captured["limit"] >= 6
+    assert len(payload["tracks"]) == 6
+    assert all(track["track_id"] != "blocked-1" for track in payload["tracks"])
+
+
+def test_feedback_reset_restores_hidden_songs(monkeypatch, tmp_path):
+    database_path = tmp_path / "moodtune-feedback-reset.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    client = app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["visitor_id"] = "reset-feedback-visitor"
+    save_song_feedback(
+        "reset-feedback-visitor",
+        {"track_id": "hidden-1", "track_name": "恢復歌曲", "artist_name": "MoodTune", "genre": "抒情"},
+        "tag_mismatch",
+    )
+
+    response = client.post("/api/feedback/reset")
+    rows, error = fetch_song_feedback("reset-feedback-visitor")
+
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+    assert error is None and rows == []
+
+
 def test_history_page_shows_chart_and_weekly_report(monkeypatch, tmp_path):
     database_path = tmp_path / "moodtune-history.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path.as_posix()}")

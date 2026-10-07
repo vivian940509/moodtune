@@ -542,6 +542,18 @@ def fetch_song_feedback(visitor_id):
         return [], str(exc)
 
 
+def clear_song_feedback(visitor_id):
+    try:
+        with db_connection() as connection:
+            connection.execute(
+                text("DELETE FROM song_feedback WHERE visitor_id = :visitor_id"),
+                {"visitor_id": visitor_id},
+            )
+            return True, None
+    except SQLAlchemyError as exc:
+        return False, str(exc)
+
+
 def delete_favorite_song(favorite_id, visitor_id=None):
     """Delete one favorite only when it belongs to the current visitor/account."""
     try:

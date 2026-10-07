@@ -351,6 +351,16 @@ button:disabled {
   color: var(--teal-dark);
 }
 
+.reset-feedback-button {
+  min-height: 34px;
+  margin-top: 10px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--teal-dark);
+  font-size: .86rem;
+}
+
 fieldset {
   margin: 18px 0 0;
   padding: 0;

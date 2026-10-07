@@ -7,6 +7,7 @@ const selectedSong = document.querySelector("#selectedSong");
 const analyzeButton = document.querySelector("#analyzeButton");
 const moodText = document.querySelector("#moodText");
 const moodSuggestion = document.querySelector("#moodSuggestion");
+const resetFeedbackButton = document.querySelector("#resetFeedbackButton");
 const moodInputs = Array.from(document.querySelectorAll('input[name="mood"]'));
 let moodManuallySelected = false;
 
@@ -97,12 +98,36 @@ async function search() {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "搜尋失敗");
     renderTracks(payload.tracks || []);
+    if (resetFeedbackButton) {
+      resetFeedbackButton.hidden = !(payload.filtered_by_feedback > 0);
+      resetFeedbackButton.textContent = payload.filtered_by_feedback > 0
+        ? `已隱藏 ${payload.filtered_by_feedback} 首，恢復推薦歌曲`
+        : "恢復被隱藏的歌曲";
+    }
   } catch (error) {
     trackResults.innerHTML = "";
     searchHint.textContent = error.message;
   } finally {
     searchButton.disabled = false;
   }
+}
+
+if (resetFeedbackButton) {
+  resetFeedbackButton.addEventListener("click", async () => {
+    resetFeedbackButton.disabled = true;
+    try {
+      const response = await fetch("/api/feedback/reset", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error("重設歌曲偏好失敗");
+      resetFeedbackButton.hidden = true;
+      search();
+    } catch (error) {
+      searchHint.textContent = error.message;
+      resetFeedbackButton.disabled = false;
+    }
+  });
 }
 
 searchButton.addEventListener("click", search);

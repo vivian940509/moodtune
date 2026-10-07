@@ -18,6 +18,7 @@ from database import (
     create_user_and_migrate,
     fetch_favorite_songs,
     fetch_song_feedback,
+    clear_song_feedback,
     delete_favorite_song,
     fetch_history,
     fetch_user_by_email,
@@ -353,18 +354,21 @@ def preferences():
 @app.get("/api/search")
 def api_search():
     term = request.args.get("q", "")
-    limit = request.args.get("limit", 8, type=int)
-    limit = max(1, min(limit or 8, 12))
+    limit = request.args.get("limit", 6, type=int)
+    limit = max(1, min(limit or 6, 12))
     try:
         preferences_data, _ = fetch_preferences(session["visitor_id"])
+        # Fetch extra candidates before applying persistent feedback, otherwise
+        # previously hidden songs can leave the page with only one or two cards.
         tracks = search_tracks(
-            term, limit=limit,
+            term, limit=max(limit, 24),
             music_language=(preferences_data or {}).get("music_language"),
             favorite_genre=(preferences_data or {}).get("favorite_genre"),
         )
         feedback, _ = fetch_song_feedback(session["visitor_id"])
+        before_feedback_count = len(tracks)
         tracks = filter_tracks_by_feedback(tracks, feedback)
-        return jsonify({"tracks": tracks, "music_language": (preferences_data or {}).get("music_language")})
+        return jsonify({"tracks": tracks[:limit], "filtered_by_feedback": before_feedback_count - len(tracks), "music_language": (preferences_data or {}).get("music_language")})
     except Exception as exc:
         return jsonify({"error": f"搜尋暫時失敗：{exc}"}), 502
 
@@ -638,6 +642,14 @@ def api_feedback():
     if not ok:
         return jsonify({"error": error or "回饋保存失敗。"}), 400
     return jsonify({"ok": True, "track_id": song.get("track_id"), "feedback_type": feedback_type})
+
+
+@app.post("/api/feedback/reset")
+def api_feedback_reset():
+    ok, error = clear_song_feedback(session["visitor_id"])
+    if not ok:
+        return jsonify({"error": error or "無法重設歌曲回饋。"}), 500
+    return jsonify({"ok": True})
 
 
 @app.post("/favorites/<int:favorite_id>/delete")
